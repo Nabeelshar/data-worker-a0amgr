@@ -1,0 +1,16 @@
+{
+  "wordpress_url": "https://mtlblnovels.com",
+  "api_key": "PLACEHOLDER_USE_ENVIRONMENT_VARIABLE",
+  "translation_service": "openrouter",
+  "openrouter_api_key": "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",
+  "openrouter_model": "google/gemini-2.0-flash-lite-preview-02-05:free",
+  "google_project_id": "",
+  "google_credentials_file": "",
+  "max_chapters_per_run": 999,
+  "bulk_chapter_size": 25,
+  "delay_between_requests": 2,
+  "translate": true,
+  "target_language": "en",
+  "default_source_lang": "zh-CN",
+  "default_target_lang": "en"
+}

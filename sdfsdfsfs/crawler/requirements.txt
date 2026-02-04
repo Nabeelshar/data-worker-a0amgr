@@ -1,0 +1,6 @@
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+googletrans==4.0.0rc1
+urllib3>=2.0.0
+EbookLib>=0.17.1

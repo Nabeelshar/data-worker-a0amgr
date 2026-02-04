@@ -1,0 +1,33 @@
+{
+  "processed_novels": {
+    "https://www.xbanxia.cc/books/397161.html": {
+      "status": "in_progress",
+      "chapters_crawled": 11,
+      "chapters_total": 138,
+      "story_id": 86,
+      "last_updated": "2025-11-05T15:44:45.403655"
+    },
+    "https://www.xbanxia.cc/books/397158.html": {
+      "status": "in_progress",
+      "chapters_crawled": 11,
+      "chapters_total": 75,
+      "story_id": 98,
+      "last_updated": "2025-11-05T15:45:33.575751"
+    },
+    "https://www.xbanxia.cc/books/397156.html": {
+      "status": "in_progress",
+      "chapters_crawled": 11,
+      "chapters_total": 87,
+      "story_id": 110,
+      "last_updated": "2025-11-05T15:46:25.592797"
+    },
+    "https://www.xbanxia.cc/books/397151.html": {
+      "status": "in_progress",
+      "chapters_crawled": 6,
+      "chapters_total": 141,
+      "story_id": 146,
+      "last_updated": "2025-11-05T15:46:51.390619"
+    }
+  },
+  "last_category_page": "https://www.biqiuge.com/modules/article/waps.php"
+}
