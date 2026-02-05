@@ -155,15 +155,36 @@ Text:
         
         return existing_glossary
 
-    def translate(self, text, source_lang='zh-CN', target_lang='en', glossary=None):
+    def translate(self, text, source_lang='zh-CN', target_lang='en', glossary=None, system_prompt=None):
         """Translate text using configured service"""
         if not self.client:
             raise Exception("No translator available")
         
         # Remove internal try-except to allow catching errors in main loop
         if self.service == 'openrouter':
-            return self._translate_openrouter(text, source_lang, target_lang, glossary)
+            return self._translate_openrouter(text, source_lang, target_lang, glossary, system_prompt)
         return self._translate_googletrans(text, source_lang, target_lang)
+
+    def translate_title(self, text, source='zh-CN', target='en'):
+        """Specialized translation for story titles"""
+        prompt = f"""You are an expert webnovel translator. Translate this {source} title to {target}.
+Rules:
+1. Use Standard Title Case (Capitalize First Letter of Major Words).
+2. Keep it concise, catchy, and idiomatic for English readers.
+3. Do not add quotes, notes, or explanations.
+4. Strictly output ONLY the translation."""
+        return self.translate(text, source_lang=source, target_lang=target, system_prompt=prompt)
+
+    def translate_description(self, text, source='zh-CN', target='en'):
+        """Specialized translation for story descriptions"""
+        prompt = f"""You are an expert webnovel translator. Translate this {source} synopsis to {target}.
+Rules:
+1. Maintain the original meaning but make it flow naturally in English.
+2. Use standard English capitalization and punctuation.
+3. Fix fragmented sentences if necessary for readability.
+4. Do not summarize; translate the full text.
+5. Do not add notes or explanations."""
+        return self.translate(text, source_lang=source, target_lang=target, system_prompt=prompt)
             
     def generate_metadata(self, title, description):
         """Generate genres and tags for the novel using LLM."""
@@ -221,7 +242,7 @@ Output strictly valid JSON with this format:
             
         return {'genres': [], 'tags': []}
 
-    def _translate_openrouter(self, text, source, target, glossary=None):
+    def _translate_openrouter(self, text, source, target, glossary=None, system_prompt=None):
         """Translate using OpenRouter API"""
         headers = {
             "Authorization": f"Bearer {self.openrouter_api_key}",
@@ -230,7 +251,10 @@ Output strictly valid JSON with this format:
             "X-Title": "NovelCrawler" # Optional
         }
         
-        prompt = f"You are a professional translator translating {source} to {target}. Maintain the original formatting, tone, and style. Preserve all HTML tags if present. Do not add any introductory or concluding remarks, just output the translation."
+        if system_prompt:
+            prompt = system_prompt
+        else:
+            prompt = f"You are a professional translator translating {source} to {target}. Maintain the original formatting, tone, and style. Preserve all HTML tags if present. Do not add any introductory or concluding remarks, just output the translation."
         
         if glossary:
             glossary_str = json.dumps(glossary, ensure_ascii=False, indent=2)

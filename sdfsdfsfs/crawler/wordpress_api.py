@@ -166,7 +166,9 @@ class WordPressAPI:
                 result = response.json()
                 return {
                     'success': True,
-                    'title': result.get('story_title')
+                    'title': result.get('story_title'),
+                    'description': result.get('story_content'),
+                    'author': result.get('story_author')
                 }
             return {'success': False}
         except Exception as e:

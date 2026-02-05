@@ -971,6 +971,8 @@ class Fictioneer_Crawler_Rest_API {
         return array(
             'story_id' => $story_id,
             'story_title' => $story->post_title,
+            'story_content' => $story->post_content, // Description
+            'story_author' => get_post_meta($story_id, 'fictioneer_story_author', true),
             'story_status' => $story->post_status,
             'chapters_meta' => $story_chapters,
             'chapters_count' => is_array($story_chapters) ? count($story_chapters) : 0,
