@@ -88,6 +88,11 @@ class Fictioneer_Novel_Crawler_REST {
         // Load REST API
         require_once FICTIONEER_CRAWLER_PATH . 'includes/class-crawler-rest-api.php';
         require_once FICTIONEER_CRAWLER_PATH . 'includes/class-crawler-logger.php';
+
+        // Initialize REST API
+        if (class_exists('Fictioneer_Crawler_Rest_API')) {
+            new Fictioneer_Crawler_Rest_API();
+        }
         
         // Admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -231,14 +236,17 @@ class Fictioneer_Novel_Crawler_REST {
             $novel_url = esc_url_raw($_POST['novel_url']);
             $epub_url = '';
 
+            $epub_error = '';
             // Handle File Upload if source type is epub
             if ($source_type === 'epub' && !empty($_FILES['epub_file']['name'])) {
                 if ($_FILES['epub_file']['type'] !== 'application/epub+zip') {
-                    echo '<div class="notice notice-error"><p>Invalid file type. Please upload an EPUB file.</p></div>';
+                   $epub_error = 'Invalid file type. Please upload an EPUB file.';
+                   echo '<div class="notice notice-error"><p>' . $epub_error . '</p></div>';
                 } else {
                     require_once(ABSPATH . 'wp-admin/includes/file.php');
                     $uploaded = wp_handle_upload($_FILES['epub_file'], array('test_form' => false));
                     if (isset($uploaded['error'])) {
+                        $epub_error = $uploaded['error'];
                         echo '<div class="notice notice-error"><p>Upload failed: ' . esc_html($uploaded['error']) . '</p></div>';
                     } else {
                         $epub_url = $uploaded['url'];
@@ -285,7 +293,8 @@ class Fictioneer_Novel_Crawler_REST {
             } else {
                  if ($source_type === 'web') {
                     echo '<div class="notice notice-error"><p>Novel URL is required.</p></div>';
-                 } elseif ($source_type === 'epub' && empty($epub_url) && empty($uploaded['error'])) {
+                 } elseif ($source_type === 'epub' && empty($epub_url) && empty($epub_error)) {
+                    // Only show this if we didn't already show an upload error
                     echo '<div class="notice notice-error"><p>EPUB file is required.</p></div>';
                  }
             }
@@ -876,6 +885,24 @@ class Fictioneer_Novel_Crawler_REST {
      * Activation hook
      */
     public function activate() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'crawler_logs';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE $table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            queue_id varchar(50) DEFAULT NULL,
+            level varchar(20) NOT NULL,
+            message text NOT NULL,
+            context longtext DEFAULT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id)
+        ) $charset_collate;";
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+
         // Create logs directory
         $log_dir = FICTIONEER_CRAWLER_PATH . 'logs/';
         if (!file_exists($log_dir)) {

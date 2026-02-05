@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Crawler_Logger {
+class Fictioneer_Crawler_Logger {
     
     private static $log_dir = null;
     

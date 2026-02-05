@@ -4,6 +4,8 @@
  * Usage: php refresh-story.php STORY_ID
  */
 
+if ( php_sapi_name() !== 'cli' ) { die('Access denied'); }
+
 // Load WordPress
 require_once(__DIR__ . '/../../../wp-load.php');
 

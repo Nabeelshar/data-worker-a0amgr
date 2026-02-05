@@ -388,7 +388,7 @@ class HTML_Parser {
                 
                 if ($should_retry && $i < $retries - 1) {
                     $wait = pow(2, $i);
-                    Crawler_Logger::warning('Network error, retrying...', array(
+                    Fictioneer_Crawler_Logger::warning('Network error, retrying...', array(
                         'url' => substr($url, 0, 80),
                         'attempt' => $i + 1,
                         'error' => $last_error,
@@ -398,7 +398,7 @@ class HTML_Parser {
                     continue;
                 }
                 
-                Crawler_Logger::error('Failed to fetch URL: ' . substr($url, 0, 80), array(
+                Fictioneer_Crawler_Logger::error('Failed to fetch URL: ' . substr($url, 0, 80), array(
                     'error' => $last_error,
                     'attempts' => $i + 1
                 ));
@@ -414,7 +414,7 @@ class HTML_Parser {
             // Server error - retry
             if ($status_code >= 500 && $i < $retries - 1) {
                 $wait = pow(2, $i);
-                Crawler_Logger::warning('Server error, retrying...', array(
+                Fictioneer_Crawler_Logger::warning('Server error, retrying...', array(
                     'url' => substr($url, 0, 80),
                     'status' => $status_code,
                     'attempt' => $i + 1,
@@ -424,7 +424,7 @@ class HTML_Parser {
                 continue;
             }
             
-            Crawler_Logger::error('HTTP error for URL: ' . substr($url, 0, 80), array(
+            Fictioneer_Crawler_Logger::error('HTTP error for URL: ' . substr($url, 0, 80), array(
                 'status_code' => $status_code
             ));
             throw new Exception("HTTP error: $status_code");

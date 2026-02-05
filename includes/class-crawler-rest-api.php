@@ -823,15 +823,25 @@ class Fictioneer_Crawler_Rest_API {
      * Get current crawler job
      */
     public function get_current_job($request) {
-        $job = get_option('fictioneer_crawler_current_job');
+        $job_queue = get_option('fictioneer_crawler_current_job');
         
-        if (empty($job)) {
-            return array('job_available' => false);
+        if (empty($job_queue)) {
+            return array(
+                'success' => true,
+                'job_available' => false
+            );
+        }
+        
+        // Handle queue structure (array of jobs) vs single job
+        $current_job = $job_queue;
+        if (isset($job_queue[0])) {
+            $current_job = $job_queue[0];
         }
         
         return array(
+            'success' => true,
             'job_available' => true,
-            'job' => $job,
+            'job' => $current_job,
         );
     }
     
@@ -884,11 +894,10 @@ class Fictioneer_Crawler_Rest_API {
      */
     private function log_activity($message, $context = array()) {
         if (class_exists('Fictioneer_Crawler_Logger')) {
-            $logger = new Fictioneer_Crawler_Logger();
-            $logger->info($message, $context);
+            Fictioneer_Crawler_Logger::info($message, $context);
         }
     }
 }
 
-// Initialize
-new Fictioneer_Crawler_Rest_API();
+// Initialize - Removed to be called from main plugin file
+// new Fictioneer_Crawler_Rest_API();

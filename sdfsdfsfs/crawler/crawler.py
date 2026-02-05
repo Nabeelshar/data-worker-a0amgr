@@ -137,6 +137,14 @@ class NovelCrawler:
                 job = self.wordpress.get_job()
                 
                 if job:
+                    # Handle list response from API (Double safety)
+                    if isinstance(job, list):
+                        if len(job) > 0:
+                            job = job[0]
+                        else:
+                            self.log("Received empty job list")
+                            continue
+
                     self.log(f"Job received! ID: {job.get('job_id')}")
                     
                     # Update status to processing

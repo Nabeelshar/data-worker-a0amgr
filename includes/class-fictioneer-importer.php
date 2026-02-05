@@ -17,14 +17,14 @@ class Fictioneer_Importer {
      */
     public static function import_novel($novel) {
         if (empty($novel['title'])) {
-            Crawler_Logger::error('Cannot import novel without title');
+            Fictioneer_Crawler_Logger::error('Cannot import novel without title');
             return false;
         }
         
         // Check if story already exists
         $existing = self::find_existing_story($novel['title']);
         if ($existing) {
-            Crawler_Logger::info('Story already exists', array('post_id' => $existing));
+            Fictioneer_Crawler_Logger::info('Story already exists', array('post_id' => $existing));
             return $existing;
         }
         
@@ -41,7 +41,7 @@ class Fictioneer_Importer {
         $story_id = wp_insert_post($post_data);
         
         if (is_wp_error($story_id)) {
-            Crawler_Logger::error('Failed to create story', array(
+            Fictioneer_Crawler_Logger::error('Failed to create story', array(
                 'error' => $story_id->get_error_message()
             ));
             return false;
@@ -76,7 +76,7 @@ class Fictioneer_Importer {
             update_post_meta($story_id, '_crawler_source_url', esc_url_raw($novel['source_url']));
         }
         
-        Crawler_Logger::info('Story imported successfully', array(
+        Fictioneer_Crawler_Logger::info('Story imported successfully', array(
             'story_id' => $story_id,
             'title' => $novel['title']
         ));
@@ -93,14 +93,14 @@ class Fictioneer_Importer {
      */
     public static function import_chapter($story_id, $chapter) {
         if (empty($chapter['title']) || empty($chapter['content'])) {
-            Crawler_Logger::error('Cannot import chapter without title or content');
+            Fictioneer_Crawler_Logger::error('Cannot import chapter without title or content');
             return false;
         }
         
         // Check if chapter already exists
         $existing = self::find_existing_chapter($story_id, $chapter['title']);
         if ($existing) {
-            Crawler_Logger::info('Chapter already exists', array('post_id' => $existing));
+            Fictioneer_Crawler_Logger::info('Chapter already exists', array('post_id' => $existing));
             return $existing;
         }
         
@@ -118,7 +118,7 @@ class Fictioneer_Importer {
         $chapter_id = wp_insert_post($post_data);
         
         if (is_wp_error($chapter_id)) {
-            Crawler_Logger::error('Failed to create chapter', array(
+            Fictioneer_Crawler_Logger::error('Failed to create chapter', array(
                 'error' => $chapter_id->get_error_message()
             ));
             return false;
@@ -147,7 +147,7 @@ class Fictioneer_Importer {
         $word_count = self::count_words($chapter['content']);
         update_post_meta($chapter_id, '_word_count', $word_count);
         
-        Crawler_Logger::info('Chapter imported successfully', array(
+        Fictioneer_Crawler_Logger::info('Chapter imported successfully', array(
             'chapter_id' => $chapter_id,
             'story_id' => $story_id,
             'title' => $chapter['title']
@@ -227,7 +227,7 @@ class Fictioneer_Importer {
         $tmp = download_url($image_url);
         
         if (is_wp_error($tmp)) {
-            Crawler_Logger::error('Failed to download image', array(
+            Fictioneer_Crawler_Logger::error('Failed to download image', array(
                 'url' => $image_url,
                 'error' => $tmp->get_error_message()
             ));
@@ -247,7 +247,7 @@ class Fictioneer_Importer {
         @unlink($tmp);
         
         if (is_wp_error($id)) {
-            Crawler_Logger::error('Failed to import image', array(
+            Fictioneer_Crawler_Logger::error('Failed to import image', array(
                 'url' => $image_url,
                 'error' => $id->get_error_message()
             ));
@@ -303,7 +303,7 @@ class Fictioneer_Importer {
         // Update story word count
         update_post_meta($story_id, 'fictioneer_story_word_count', $total_words);
         
-        Crawler_Logger::info('Story stats updated', array(
+        Fictioneer_Crawler_Logger::info('Story stats updated', array(
             'story_id' => $story_id,
             'total_words' => $total_words,
             'chapter_count' => count($chapters)

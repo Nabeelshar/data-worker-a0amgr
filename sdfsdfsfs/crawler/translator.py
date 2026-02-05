@@ -22,7 +22,7 @@ class Translator:
         # Extract configuration
         self.service_type = config.get('translation_service', 'google')
         self.openrouter_api_key = config.get('openrouter_api_key')
-        self.openrouter_model = config.get('openrouter_model', 'google/gemini-2.0-flash-lite-preview-02-05:free')
+        self.openrouter_model = config.get('openrouter_model', 'google/gemini-2.5-flash-lite')
         
         if self.service_type == 'openrouter':
             if not self.openrouter_api_key:
