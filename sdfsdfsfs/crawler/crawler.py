@@ -324,12 +324,45 @@ class NovelCrawler:
              # Resume/Append mode - skip metadata generation if using existing story
              self.log(f"  Using existing target story ID: {target_story_id}")
              # Fetch story details if needed, or just use placeholders
-             translated_title = novel_data['title'] # Should be updated if API supported fetching story details
-             translated_description = novel_data['description']
+             # CRITICAL FIX: If we should translate, we MUST assume the story needs an English title
+             # If we don't fetch from WP, we risk using chinese for the prefix
+             if self.should_translate:
+                 try:
+                     # Check local cache first for consistency
+                     existing_metadata_path = os.path.join('novels', f'novel_{novel_id}', 'metadata.json')
+                     if os.path.exists(existing_metadata_path):
+                        with open(existing_metadata_path, 'r', encoding='utf-8') as f:
+                           existing_meta = json.load(f)
+                           translated_title = existing_meta.get('title_translated', novel_data['title'])
+                           translated_description = existing_meta.get('description_translated', novel_data['description'])
+                     else:
+                        # If no cache, we should translate to be safe, so new chapters get English prefixes
+                        self.log(f"  Re-translating title for existing story to ensure English prefix...")
+                        translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
+                        translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+                 except:
+                     translated_title = novel_data['title']
+                     translated_description = novel_data['description']
+             else:
+                 translated_title = novel_data['title']
+                 translated_description = novel_data['description']
+                 
              ai_metadata = {'genres': [], 'tags': []}
         else:
-             translated_title = novel_data['title']
-             translated_description = novel_data['description']
+             # Case where translate might be enabled but logic failed OR translate disabled
+             # Force verify logic
+             if self.should_translate:
+                  # Fallback translation if somehow missed above (e.g. string vs int issue)
+                  try:
+                       self.log(f"  Forcing translation logic on fallback path...")
+                       translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
+                       translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+                  except:
+                       translated_title = novel_data['title']
+                       translated_description = novel_data['description']
+             else:
+                  translated_title = novel_data['title']
+                  translated_description = novel_data['description']
              ai_metadata = {'genres': [], 'tags': []}
         
         if target_story_id > 0:
