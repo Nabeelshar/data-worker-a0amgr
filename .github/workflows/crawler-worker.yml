@@ -5,6 +5,10 @@ on:
     - cron: '0 */6 * * *'  # Run every 6 hours
   workflow_dispatch:       # Allow manual trigger
 
+concurrency:
+  group: crawler-worker-production
+  cancel-in-progress: false
+
 jobs:
   crawler-worker:
     runs-on: ubuntu-latest
