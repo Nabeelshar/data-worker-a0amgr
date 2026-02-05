@@ -117,6 +117,12 @@ Text:
                             return existing_glossary
                     else:
                         raise Exception(f"Invalid response from OpenRouter: {result}")
+                elif response.status_code == 401:
+                    self.logger(f"CRITICAL ERROR: OpenRouter Authorization Failed (401).")
+                    self.logger(f"  - Check your OPENROUTER_API_KEY in GitHub Secrets.")
+                    self.logger(f"  - Response: {response.text}")
+                    # Do not retry auth errors
+                    return existing_glossary
                 elif response.status_code == 429:
                     wait_time = 5 * (attempt + 1)
                     self.logger(f"Rate limited by OpenRouter. Waiting {wait_time}s...")
@@ -188,6 +194,12 @@ Text:
                         return result['choices'][0]['message']['content'].strip()
                     else:
                         raise Exception(f"Invalid response from OpenRouter: {result}")
+                elif response.status_code == 401:
+                    self.logger(f"CRITICAL ERROR: OpenRouter Authorization Failed (401).")
+                    self.logger(f"  - Check your OPENROUTER_API_KEY in GitHub Secrets.")
+                    self.logger(f"  - Response: {response.text}")
+                    # Do not retry auth errors
+                    raise Exception(f"OpenRouter Auth Error: {response.text}")
                 elif response.status_code == 429:
                     # Rate limit
                     wait_time = 5 * (attempt + 1)
