@@ -277,6 +277,12 @@ class Fictioneer_Novel_Crawler_REST {
             }
 
             if ($valid_request) {
+                 // Fetch glossary if target story is selected
+                 $glossary_content = null;
+                 if ($target_story_id > 0) {
+                     $glossary_content = get_post_meta($target_story_id, '_crawler_glossary', true);
+                 }
+
                  $job_data = array(
                     'job_id' => uniqid('job_'),
                     'job_type' => $source_type,
@@ -287,6 +293,7 @@ class Fictioneer_Novel_Crawler_REST {
                     'batch_size' => $batch_size,
                     'model' => $model,
                     'glossary' => $enable_glossary,
+                    'glossary_content' => $glossary_content, // Inject glossary
                     'source_lang' => $source_lang,
                     'target_lang' => $target_lang,
                     'status' => 'pending',
@@ -312,7 +319,7 @@ class Fictioneer_Novel_Crawler_REST {
 
         // Handle Glossary Save
         if (isset($_POST['save_glossary']) && check_admin_referer('crawler_save_glossary')) {
-            $novel_dir = sanitize_text_field($_POST['novel_dir']);
+            $story_id = intval($_POST['story_id']);
             $glossary_content = wp_unslash($_POST['glossary_content']);
             
             // Basic JSON validation
@@ -320,14 +327,9 @@ class Fictioneer_Novel_Crawler_REST {
             
             if ($json_data === null && !empty($glossary_content)) {
                 echo '<div class="notice notice-error"><p>Invalid JSON format.</p></div>';
-            } else {
-                $glossary_path = FICTIONEER_CRAWLER_PATH . 'crawler/novels/' . $novel_dir . '/glossary.json';
-                if (file_exists(dirname($glossary_path))) {
-                    file_put_contents($glossary_path, $glossary_content);
-                    echo '<div class="notice notice-success"><p>Glossary saved successfully!</p></div>';
-                } else {
-                    echo '<div class="notice notice-error"><p>Novel folder not found.</p></div>';
-                }
+            } elseif ($story_id > 0) {
+                update_post_meta($story_id, '_crawler_glossary', $glossary_content);
+                echo '<div class="notice notice-success"><p>Glossary saved successfully to Story!</p></div>';
             }
         }
 
@@ -375,6 +377,16 @@ class Fictioneer_Novel_Crawler_REST {
         // Get current job
         $current_jobs = get_option('fictioneer_crawler_current_job', array());
         $current_job = (!empty($current_jobs) && is_array($current_jobs)) ? $current_jobs[0] : null;
+
+        // Fetch stories for selection
+        $args = array(
+            'post_type'      => 'fcn_story',
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+        );
+        $stories = get_posts($args);
         ?>
         <div class="card">
             <h2>🚀 Control Panel</h2>
@@ -469,10 +481,17 @@ class Fictioneer_Novel_Crawler_REST {
                             </tr>
                             
                             <tr id="row_target_story_id" style="display:none;">
-                                <th scope="row"><label for="target_story_id">Target Story ID</label></th>
+                                <th scope="row"><label for="target_story_id">Target Story</label></th>
                                 <td>
-                                    <input name="target_story_id" type="number" id="target_story_id" class="small-text" placeholder="e.g. 123">
-                                    <p class="description">Optional: ID of an existing story to append chapters to (Web or EPUB).</p>
+                                    <select name="target_story_id" id="target_story_id">
+                                        <option value="">-- New Story / Auto Detect --</option>
+                                        <?php foreach ($stories as $story): ?>
+                                            <option value="<?php echo esc_attr($story->ID); ?>">
+                                                <?php echo esc_html($story->post_title); ?> (ID: <?php echo esc_html($story->ID); ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="description">Optional: Select an existing story to append chapters to.</p>
                                 </td>
                             </tr>
 
@@ -594,43 +613,43 @@ class Fictioneer_Novel_Crawler_REST {
      * Render Glossaries Tab
      */
     private function render_glossaries_tab() {
-        $novels_path = FICTIONEER_CRAWLER_PATH . 'crawler/novels/';
-        $novels = glob($novels_path . 'novel_*', GLOB_ONLYDIR);
+        // Fetch published stories
+        $args = array(
+            'post_type'      => 'fcn_story',
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+        );
+        $stories = get_posts($args);
         
-        $selected_novel = isset($_POST['novel_dir']) ? sanitize_text_field($_POST['novel_dir']) : '';
+        $selected_story_id = isset($_POST['story_id']) ? intval($_POST['story_id']) : 0;
         $glossary_content = '';
         
-        if ($selected_novel) {
-            $glossary_file = $novels_path . $selected_novel . '/glossary.json';
-            if (file_exists($glossary_file)) {
-                $glossary_content = file_get_contents($glossary_file);
-            } else {
+        if ($selected_story_id > 0) {
+            $glossary_content = get_post_meta($selected_story_id, '_crawler_glossary', true);
+            
+            // Default template if empty
+            if (empty($glossary_content)) {
                 $glossary_content = "{\n    \"terms\": {\n        \n    }\n}";
             }
         }
         ?>
         <div class="card">
             <h2>📖 Manage Glossaries</h2>
+            <p>Select a Story to manage its translation glossary. This glossary will be used by the crawler when "Enable Glossary Mode" is checked.</p>
+            
             <form method="post">
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><label for="novel_dir">Select Novel</label></th>
+                        <th scope="row"><label for="story_id">Select Story</label></th>
                         <td>
-                            <select name="novel_dir" id="novel_dir" onchange="this.form.submit()">
-                                <option value="">-- Select Novel --</option>
-                                <?php foreach ($novels as $novel_path): 
-                                    $dirname = basename($novel_path);
-                                    // Try to get title from metadata
-                                    $title = $dirname;
-                                    $meta_file = $novel_path . '/metadata.json';
-                                    if (file_exists($meta_file)) {
-                                        $meta = json_decode(file_get_contents($meta_file), true);
-                                        if (isset($meta['title'])) {
-                                            $title = $meta['title'] . ' (' . $dirname . ')';
-                                        }
-                                    }
-                                ?>
-                                    <option value="<?php echo esc_attr($dirname); ?>" <?php selected($selected_novel, $dirname); ?>><?php echo esc_html($title); ?></option>
+                            <select name="story_id" id="story_id" onchange="this.form.submit()">
+                                <option value="">-- Select Story --</option>
+                                <?php foreach ($stories as $story): ?>
+                                    <option value="<?php echo esc_attr($story->ID); ?>" <?php selected($selected_story_id, $story->ID); ?>>
+                                        <?php echo esc_html($story->post_title); ?> (ID: <?php echo esc_html($story->ID); ?>)
+                                    </option>
                                 <?php endforeach; ?>
                             </select>
                         </td>
@@ -638,16 +657,19 @@ class Fictioneer_Novel_Crawler_REST {
                 </table>
             </form>
 
-            <?php if ($selected_novel): ?>
+            <?php if ($selected_story_id > 0): ?>
                 <hr>
                 <form method="post">
                     <?php wp_nonce_field('crawler_save_glossary'); ?>
                     <input type="hidden" name="save_glossary" value="1">
-                    <input type="hidden" name="novel_dir" value="<?php echo esc_attr($selected_novel); ?>">
+                    <input type="hidden" name="story_id" value="<?php echo esc_attr($selected_story_id); ?>">
                     
                     <h3>Glossary JSON</h3>
-                    <p class="description">Edit the translation glossary for this novel. Must be valid JSON.</p>
-                    <textarea name="glossary_content" rows="15" class="large-text code" style="font-family: monospace;"><?php echo esc_textarea($glossary_content); ?></textarea>
+                    <p class="description">
+                        Format: <code>"original_term": "translated_term"</code><br>
+                        Example: <code>"Shifu": "Master"</code>
+                    </p>
+                    <textarea name="glossary_content" rows="20" class="large-text code" style="font-family: monospace; background: #fafafa;"><?php echo esc_textarea($glossary_content); ?></textarea>
                     
                     <p class="submit">
                         <button type="submit" class="button button-primary">Save Glossary</button>

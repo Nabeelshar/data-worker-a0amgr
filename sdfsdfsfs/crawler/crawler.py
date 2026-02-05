@@ -101,7 +101,8 @@ class NovelCrawler:
                 # Use single endpoint if batch size is 1 (avoid bulk overhead)
                 try:
                     res = self.wordpress.create_chapter(batch[0])
-                    if res and res.get('success'):
+                    # Note: create_chapter returns {'id': ..., 'existed': ...}, it does NOT return 'success'
+                    if res and res.get('id'):
                          bulk_result = {
                              'success': True,
                              'created': 0 if res.get('existed') else 1,
@@ -323,29 +324,37 @@ class NovelCrawler:
         elif target_story_id > 0:
              # Resume/Append mode - skip metadata generation if using existing story
              self.log(f"  Using existing target story ID: {target_story_id}")
-             # Fetch story details if needed, or just use placeholders
-             # CRITICAL FIX: If we should translate, we MUST assume the story needs an English title
-             # If we don't fetch from WP, we risk using chinese for the prefix
-             if self.should_translate:
-                 try:
-                     # Check local cache first for consistency
-                     existing_metadata_path = os.path.join('novels', f'novel_{novel_id}', 'metadata.json')
-                     if os.path.exists(existing_metadata_path):
-                        with open(existing_metadata_path, 'r', encoding='utf-8') as f:
-                           existing_meta = json.load(f)
-                           translated_title = existing_meta.get('title_translated', novel_data['title'])
-                           translated_description = existing_meta.get('description_translated', novel_data['description'])
-                     else:
-                        # If no cache, we should translate to be safe, so new chapters get English prefixes
-                        self.log(f"  Re-translating title for existing story to ensure English prefix...")
-                        translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
-                        translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
-                 except:
+             
+             # Fetch actual title from WordPress to prevent re-translation drift
+             wp_story_info = self.wordpress.get_story_details(target_story_id)
+             if wp_story_info.get('success') and wp_story_info.get('title'):
+                 translated_title = wp_story_info['title']
+                 # We don't have description from simple debug endpoint, but title is the critical part for filenames
+                 translated_description = novel_data['description'] 
+                 self.log(f"  Fetched existing title from WordPress: {translated_title}")
+             else:
+                 # Fallback to translation if fetch fails
+                 if self.should_translate:
+                     try:
+                         # Check local cache first for consistency
+                         existing_metadata_path = os.path.join('novels', f'novel_{novel_id}', 'metadata.json')
+                         if os.path.exists(existing_metadata_path):
+                            with open(existing_metadata_path, 'r', encoding='utf-8') as f:
+                               existing_meta = json.load(f)
+                               translated_title = existing_meta.get('title_translated', novel_data['title'])
+                               translated_description = existing_meta.get('description_translated', novel_data['description'])
+                               self.log(f"  Using cached local title: {translated_title}")
+                         else:
+                            # If no cache, we should translate to be safe, so new chapters get English prefixes
+                            self.log(f"  Re-translating title for chapter context (will skip metadata update)...")
+                            translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
+                            translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+                     except:
+                         translated_title = novel_data['title']
+                         translated_description = novel_data['description']
+                 else:
                      translated_title = novel_data['title']
                      translated_description = novel_data['description']
-             else:
-                 translated_title = novel_data['title']
-                 translated_description = novel_data['description']
                  
              ai_metadata = {'genres': [], 'tags': []}
         else:
@@ -404,7 +413,31 @@ class NovelCrawler:
 
         # 4. Glossary Loop
         batch_size = 5 # Keep batch size 5 for glossary context
-        current_glossary = self.file_manager.load_glossary(novel_id)
+        
+        # Check for injected glossary from Job
+        injected_glossary = job_data.get('glossary_content')
+        if injected_glossary:
+            try:
+                if isinstance(injected_glossary, str):
+                     injected_glossary = json.loads(injected_glossary)
+                
+                # Convert KV to List if needed
+                if isinstance(injected_glossary, dict):
+                    # Check for "terms" wrapper or direct KV
+                    terms = injected_glossary.get('terms', injected_glossary)
+                    current_glossary = []
+                    for k, v in terms.items():
+                        if isinstance(v, str): # Simple KV
+                            current_glossary.append({'original': k, 'translation': v, 'type': 'manual'})
+                elif isinstance(injected_glossary, list):
+                    current_glossary = injected_glossary
+                
+                self.log(f"  Loaded glossary from Job: {len(current_glossary)} terms")
+            except Exception as e:
+                self.log(f"  Failed to parse job glossary: {e}")
+                current_glossary = self.file_manager.load_glossary(novel_id)
+        else:
+            current_glossary = self.file_manager.load_glossary(novel_id)
         
         total_batches = (len(chapters_to_do) + batch_size - 1) // batch_size
         
@@ -488,6 +521,13 @@ class NovelCrawler:
         # REFRESH CACHE: Final story update to ensure chapter lists and caches are consistent
         self.log("Refreshing story cache and metadata...")
         try:
+           # Also sync glossary back to WP now that we are done
+           final_glossary_kv = None
+           if glossary_mode and current_glossary:
+               final_glossary_kv = {"terms": {}}
+               for item in current_glossary:
+                   final_glossary_kv["terms"][item['original']] = item['translation']
+
            story_update_data = {
                'title': translated_title,
                'description': translated_description,
@@ -495,9 +535,10 @@ class NovelCrawler:
                'author': novel_data['author'],
                'url': novel_url,
                'cover_url': novel_data['cover_url'],
+               'glossary': final_glossary_kv # Add glossary to payload
            }
            self.wordpress.create_story(story_update_data)
-           self.log("✓ Story cache refreshed")
+           self.log("✓ Story cache refreshed & Glossary synced")
         except Exception as e:
            self.log(f"⚠ Failed to refresh story cache: {e}")
 
@@ -955,21 +996,38 @@ class NovelCrawler:
            # Check/Create story section (Step 5) already has the latest metadata variables.
            # Reuse 'story_data_final' from earlier if possible, or reconstruct minimal update.
            
+           # Also sync glossary back to WP now that we are done
+           final_glossary_kv = None
+           if self.should_translate:  # Check should_translate locally as glossary_mode scope might be gone
+               # Reload from file to get latest
+               latest_glossary = self.file_manager.load_glossary(novel_id)
+               if latest_glossary:
+                    final_glossary_kv = {"terms": {}}
+                    for item in latest_glossary:
+                        final_glossary_kv["terms"][item['original']] = item['translation']
+
            # We reconstruct with known data to be safe
            final_update_data = {
-               'title': translated_title,
-               'description': translated_description,
-               'title_zh': novel_data['title'],
-               'author': novel_data['author'],
                'url': novel_url,
                'cover_url': novel_data['cover_url'],
-               # Cover path might be local, but URL is what matters for the API unless we upload file content (which we don't here)
+               # Cover path might be local, but URL is what matters for the API
+               'glossary': final_glossary_kv
            }
+           
+           # Only include metadata updates if we are NOT in append mode or explicitly want to overwrite
+           if not target_story_id or target_story_id == 0:
+                final_update_data.update({
+                   'title': translated_title,
+                   'description': translated_description,
+                   'title_zh': novel_data['title'],
+                   'author': novel_data['author'],
+                })
+           
            # If we have the ID, we can assume the API uses the URL/Title to find it, 
            # but the PHP script checks URL first.
            
            self.wordpress.create_story(final_update_data)
-           self.log("✓ Story cache refreshed")
+           self.log("✓ Story cache refreshed & Glossary synced")
         except Exception as e:
            self.log(f"⚠ Failed to refresh story cache: {e}")
 

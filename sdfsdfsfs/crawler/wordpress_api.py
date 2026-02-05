@@ -154,6 +154,25 @@ class WordPressAPI:
             # Fallback to individual checks
             return {'success': False, 'chapters_count': 0, 'is_complete': False, 'existing_chapters': []}
     
+    def get_story_details(self, story_id):
+        """Get story details (title) using debug endpoint"""
+        try:
+            response = self.session.get(
+                f"{self.wordpress_url}/wp-json/crawler/v1/story/{story_id}/debug",
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return {
+                    'success': True,
+                    'title': result.get('story_title')
+                }
+            return {'success': False}
+        except Exception as e:
+             self.logger(f"Failed to fetch story details: {e}")
+             return {'success': False}
+
     def check_chapter_exists(self, story_id, chapter_number):
         """Check if chapter already exists in WordPress"""
         try:

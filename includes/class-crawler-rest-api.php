@@ -31,7 +31,7 @@ class Fictioneer_Crawler_Rest_API {
                     'sanitize_callback' => 'sanitize_url',
                 ),
                 'title' => array(
-                    'required' => true,
+                    'required' => false,  // Changed to false for updates
                     'type' => 'string',
                     'sanitize_callback' => 'sanitize_text_field',
                 ),
@@ -69,6 +69,10 @@ class Fictioneer_Crawler_Rest_API {
                         'type' => 'string',
                         'sanitize_callback' => 'sanitize_text_field',
                     ),
+                ),
+                'glossary' => array(
+                    'required' => false,
+                    'type' => 'object',  // JSON object/array
                 ),
             ),
         ));
@@ -312,6 +316,16 @@ class Fictioneer_Crawler_Rest_API {
                 wp_set_object_terms($story_id, $tags, 'post_tag');
             }
 
+            // Update Glossary (Sync from Crawler)
+            $glossary = $request->get_param('glossary');
+            if (!empty($glossary)) {
+                // Ensure it's stored as JSON string
+                if (is_array($glossary) || is_object($glossary)) {
+                    $glossary = json_encode($glossary, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+                }
+                update_post_meta($story_id, '_crawler_glossary', $glossary);
+            }
+
             // Story exists - no need to trigger full hooks
             return array(
                 'success' => true,
@@ -378,6 +392,15 @@ class Fictioneer_Crawler_Rest_API {
         $tags = $request->get_param('tags');
         if (!empty($tags) && is_array($tags)) {
             wp_set_object_terms($story_id, $tags, 'post_tag');
+        }
+
+        // Update Glossary (Sync from Crawler for new stories)
+        $glossary = $request->get_param('glossary');
+        if (!empty($glossary)) {
+            if (is_array($glossary) || is_object($glossary)) {
+                $glossary = json_encode($glossary, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+            }
+            update_post_meta($story_id, '_crawler_glossary', $glossary);
         }
 
         // Log activity
