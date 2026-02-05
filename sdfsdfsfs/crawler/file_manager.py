@@ -35,7 +35,12 @@ class FileManager:
         os.makedirs(chapters_dir, exist_ok=True)
         
         # Format: NovelName_Chapter_001.html
-        safe_novel_name = novel_name.replace(' ', '_').replace('/', '_').replace('\\', '_')[:50]
+        # Sanitize filename (remove Windows reserved chars)
+        safe_novel_name = novel_name
+        for char in ['<', '>', ':', '"', '/', '\\', '|', '?', '*']:
+            safe_novel_name = safe_novel_name.replace(char, '')
+        
+        safe_novel_name = safe_novel_name.replace(' ', '_')[:50]
         filename = f"{safe_novel_name}_Chapter_{chapter_number:03d}.html"
         filepath = os.path.join(chapters_dir, filename)
         

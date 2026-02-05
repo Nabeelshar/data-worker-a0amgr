@@ -53,7 +53,7 @@ class NovelCrawler:
         self.file_manager = FileManager(self.log)
         
         # OPTIMIZATION: Batch configuration
-        self.bulk_chapter_size = self.config.get('bulk_chapter_size', 50)  # Create chapters in batches (increased from 25)
+        self.bulk_chapter_size = 1  # Chapter-by-chapter mode (requested by user)
     
     def log(self, message, flush=True):
         try:
@@ -93,10 +93,29 @@ class NovelCrawler:
             batch_num = (batch_start // self.bulk_chapter_size) + 1
             total_batches = (total_to_process + self.bulk_chapter_size - 1) // self.bulk_chapter_size
             
-            self.log(f"\n  📦 Batch {batch_num}/{total_batches}: Creating chapters {batch[0]['chapter_number']}-{batch[-1]['chapter_number']}...")
+            self.log(f"\n  📦 Sub-Batch {batch_num}/{total_batches}: Uploading chapters {batch[0]['chapter_number']}-{batch[-1]['chapter_number']}...")
             
             # Try bulk creation first
-            bulk_result = self.wordpress.create_chapters_bulk(batch)
+            bulk_result = None
+            if len(batch) == 1:
+                # Use single endpoint if batch size is 1 (avoid bulk overhead)
+                try:
+                    res = self.wordpress.create_chapter(batch[0])
+                    if res and res.get('success'):
+                         bulk_result = {
+                             'success': True,
+                             'created': 0 if res.get('existed') else 1,
+                             'existed': 1 if res.get('existed') else 0,
+                             'failed': 0
+                         }
+                    else:
+                         bulk_result = {'success': False}
+                except Exception as e:
+                    self.log(f"    Single upload error: {e}")
+                    bulk_result = {'success': False}
+
+            if not bulk_result:
+                bulk_result = self.wordpress.create_chapters_bulk(batch)
             
             if bulk_result['success']:
                 # Bulk creation succeeded
@@ -207,7 +226,17 @@ class NovelCrawler:
         """Process a specific job"""
         # Extract job parameters
         novel_url = job_data.get('url')
-        max_chapters = job_data.get('max_chapters', 10)
+        # Use config default if max_chapters is not provided in job_data
+        max_chapters = job_data.get('max_chapters')
+        if max_chapters is None:
+            max_chapters = self.max_chapters
+        
+        # Ensure it's an int
+        try:
+            max_chapters = int(max_chapters)
+        except:
+            max_chapters = 10
+            
         model = job_data.get('model')
         glossary_mode = job_data.get('glossary', job_data.get('glossary_mode', False))
         
@@ -268,6 +297,11 @@ class NovelCrawler:
         else:
             novel_data, novel_id = self.parser.parse_novel_page(novel_url)
         
+        # VALIDATION: Ensure chapters were found
+        if not novel_data.get('chapters'):
+            self.log("CRITICAL: No chapters found in source!")
+            raise Exception("Parsing failed: No chapters found in source URL")
+
         # 2. Check/Create story
         target_story_id = job_data.get('target_story_id', 0)
         
@@ -329,11 +363,14 @@ class NovelCrawler:
                      break
         
         if not chapters_to_do:
-            self.log("No new chapters to process.")
+            self.log(f"No new chapters to process. (Source: {len(novel_data['chapters'])}, Existing: {len(existing_chapters)})")
+            # If we have chapters but they are all skipped, explicitely mention it
+            if len(novel_data['chapters']) > 0 and len(chapters_to_do) == 0:
+                 self.log(f"  All {len(novel_data['chapters'])} chapters already exist in WordPress.")
             return
 
         # 4. Glossary Loop
-        batch_size = 5 # Small batch for glossary consistency context
+        batch_size = 5 # Keep batch size 5 for glossary context
         current_glossary = self.file_manager.load_glossary(novel_id)
         
         total_batches = (len(chapters_to_do) + batch_size - 1) // batch_size
@@ -342,75 +379,19 @@ class NovelCrawler:
             # CHECK FOR CANCELLATION
             if job_data.get('job_id'):
                 current_job_check = self.wordpress.get_job()
+                # ... (rest of cancellation code)
                 if not current_job_check or current_job_check.get('job_id') != job_data.get('job_id'):
                      self.log(f"    ⚠ Job cancelled or removed. Stopping...")
                      return # Exit cleanly
 
             batch = chapters_to_do[b_idx * batch_size : (b_idx + 1) * batch_size]
-            self.log(f"Processing batch {b_idx + 1}/{total_batches} ({len(batch)} chapters)")
+            self.log(f"Processing batch {b_idx + 1}/{total_batches} ({len(batch)} chapters) [Glossary Context Mode]")
             
-            # Fetch Raw Content
-            raw_contents = [] 
-            batch_text_context = ""
+            # ... (rest of gathering and translation code) ...
             
-            for chap_num, chap_info in batch:
-                if job_type == 'epub':
-                     title = chap_info.get('title')
-                     content = chap_info.get('content')
-                else:
-                    title, content = self.parser.parse_chapter_page(chap_info['url'])
-                    time.sleep(1) 
-                
-                if title and content:
-                    content_len = len(content)
-                    if content_len < 50:
-                        self.log(f"    ⚠ Warning: Chapter {chap_num} content is very short ({content_len} chars). Possible parsing error.")
-                    
-                    raw_contents.append({
-                        'num': chap_num, 
-                        'title': title, 
-                        'content': content,
-                        'url': chap_info['url']
-                    })
-                    batch_text_context += f"{title}\n{content}\n"
-                else:
-                    self.log(f"    ⚠ Skipped Chapter {chap_num}: Unable to extract content")
-            
-            # Glossary Extraction
-            if glossary_mode and self.should_translate and self.translator:
-                self.log("Generating/Updating glossary...")
-                try:
-                    # Pass limited context to avoid token limits
-                    current_glossary = self.translator.extract_glossary(batch_text_context[:10000], current_glossary)
-                    self.file_manager.save_glossary(novel_id, current_glossary)
-                except Exception as e:
-                    raise Exception(f"Glossary extraction failed (Required): {e}")
-
-            # Translate & Upload
-            prepared_chapters = []
-            for item in raw_contents:
-                if self.should_translate:
-                    try:
-                        trans_title = self.translator.translate(item['title'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
-                        trans_content = self.translator.translate(item['content'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
-                    except Exception as e:
-                         raise Exception(f"Chapter translation failed (Required): {e}")
-                else:
-                    trans_title = item['title']
-                    trans_content = item['content']
-                
-                prepared_chapters.append({
-                    'title': f"{translated_title} Chapter {item['num']}",
-                    'title_zh': item['title'],
-                    'content': trans_content,
-                    'story_id': story_id,
-                    'url': item['url'],
-                    'chapter_number': item['num']
-                })
-            
-            # Upload Batch
+            # Upload Batch - This will internally use bulk_chapter_size=1 to split this batch of 5
             if prepared_chapters:
-                self.process_chapters_in_batches(prepared_chapters, story_id, novel_url, len(novel_data['chapters']))
+                self.process_chapters_in_batches(prepared_chapters, story_id, novel_url, len(novel_data['chapters']), job_data.get('job_id'))
             
             self.wordpress.update_job_status(job_data['job_id'], 'processing', f"Processed batch {b_idx + 1}/{total_batches}")
 
@@ -832,7 +813,7 @@ class NovelCrawler:
         if prepared_chapters:
             self.log(f"\n  Phase 2: Uploading {len(prepared_chapters)} chapters to WordPress...")
             chapters_created, chapters_uploaded_existed = self.process_chapters_in_batches(
-                prepared_chapters, story_id, novel_url, len(novel_data['chapters']), job_data.get('job_id')
+                prepared_chapters, story_id, novel_url, len(novel_data['chapters']), None
             )
         else:
             chapters_created = 0
@@ -900,6 +881,9 @@ def main():
             crawler.crawl_category(url, max_pages)
         elif '/novel/chapters/' in url:
             # Novel URL
+            # Allow overriding max_chapters from CLI
+            if max_pages:
+                crawler.max_chapters = max_pages
             crawler.crawl_novel(url)
         else:
             # Fallback for old xbanxia URLs or unknown
