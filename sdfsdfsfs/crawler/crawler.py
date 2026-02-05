@@ -163,7 +163,8 @@ class NovelCrawler:
                     # Prevent processing completed/failed jobs to avoid loops
                     # ALSO check our local history
                     if job_status in ['completed', 'failed'] or job_id in processed_job_ids:
-                        self.log(f"Job {job_id} already processed (Status: {job_status}). Waiting for new job...")
+                        fail_reason = job.get('message', 'No reason provided')
+                        self.log(f"Job {job_id} already processed (Status: {job_status}). Reason: {fail_reason}. Waiting for new job...")
                         time.sleep(30)
                         continue
 

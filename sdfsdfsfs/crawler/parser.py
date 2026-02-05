@@ -76,15 +76,32 @@ class NovelParser:
         domain = 'https://www.ttkan.co'
         self.session.headers.update({'Referer': domain})
         
-        try:
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-        except Exception as e:
-            self.logger(f"Request failed: {e}. Retrying with new session...")
-            # Re-init session on failure
-            self.__init__(self.logger)
-            time.sleep(5)
-            response = self.session.get(url, timeout=30)
+        response = None
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    self.logger(f"Retry {attempt}/{max_retries} for novel page...")
+                    time.sleep(5)
+                
+                response = self.session.get(url, timeout=30)
+                response.raise_for_status()
+                break # Success
+            except Exception as e:
+                self.logger(f"Request failed: {e}. Retrying with new session...")
+                # Re-init session on failure
+                self.__init__(self.logger)
+                time.sleep(5)
+                # Last attempt try again
+                if attempt == max_retries - 1:
+                    try:
+                       response = self.session.get(url, timeout=30)
+                    except:
+                       pass
+
+        if not response:
+             raise Exception(f"Failed to load novel page after {max_retries} retries")
 
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.content, 'lxml')
