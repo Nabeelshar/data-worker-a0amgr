@@ -9,7 +9,8 @@ class Fictioneer_Crawler_Rest_API {
     
     private $batch_cache_clear = array(); // Track posts to clear cache after batch
     private $batch_in_progress = false; // Flag to defer cache clearing
-    
+    private $batch_new_chapters = array(); // Track new chapters created in batch
+
     public function __construct() {
         add_action('rest_api_init', array($this, 'register_routes'));
     }
@@ -448,10 +449,20 @@ class Fictioneer_Crawler_Rest_API {
             }
             
             if (!in_array($chapter_id, $story_chapters)) {
-                $story_chapters[] = $chapter_id;
-                update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+                // If in batch mode, don't update meta yet to prevent race conditions/cache issues
+                if ($this->batch_in_progress) {
+                    if (!isset($this->batch_new_chapters[$story_id])) {
+                         $this->batch_new_chapters[$story_id] = array();
+                    }
+                    if (!in_array($chapter_id, $this->batch_new_chapters[$story_id])) {
+                         $this->batch_new_chapters[$story_id][] = $chapter_id;
+                    }
+                } else {
+                    $story_chapters[] = $chapter_id;
+                    update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+                }
                 
-                // Update crawler progress tracking
+                // Update crawler progress tracking (SAFE to update individually as these are simple ints)
                 $chapters_crawled = (int) get_post_meta($story_id, 'crawler_chapters_crawled', true);
                 $chapters_crawled++;
                 update_post_meta($story_id, 'crawler_chapters_crawled', $chapters_crawled);
@@ -555,8 +566,18 @@ class Fictioneer_Crawler_Rest_API {
         
         // Only add if not already in the list
         if (!in_array($chapter_id, $story_chapters)) {
-            $story_chapters[] = $chapter_id;
-            update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+            // If in batch mode, don't update meta yet to prevent race conditions/cache issues
+            if ($this->batch_in_progress) {
+                if (!isset($this->batch_new_chapters[$story_id])) {
+                        $this->batch_new_chapters[$story_id] = array();
+                }
+                if (!in_array($chapter_id, $this->batch_new_chapters[$story_id])) {
+                        $this->batch_new_chapters[$story_id][] = $chapter_id;
+                }
+            } else {
+                $story_chapters[] = $chapter_id;
+                update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+            }
             
             // Update crawler progress tracking
             $chapters_crawled = (int) get_post_meta($story_id, 'crawler_chapters_crawled', true);
@@ -675,6 +696,33 @@ class Fictioneer_Crawler_Rest_API {
         // Disable batch mode
         $this->batch_in_progress = false;
         
+        // NOW apply batch updates to story chapters (Prevent Race Conditions)
+        if (!empty($this->batch_new_chapters)) {
+             foreach ($this->batch_new_chapters as $story_id => $new_chapter_ids) {
+                  // Re-fetch fresh meta
+                  $story_chapters = get_post_meta($story_id, 'fictioneer_story_chapters', true);
+                  if (!is_array($story_chapters)) {
+                      $story_chapters = array();
+                  }
+                  
+                  $added = 0;
+                  foreach ($new_chapter_ids as $cid) {
+                      if (!in_array($cid, $story_chapters)) {
+                          $story_chapters[] = $cid;
+                          $added++;
+                      }
+                  }
+                  
+                  if ($added > 0) {
+                      // Sort by chapter number naturally (assuming IDs might not be sequential but we want valid order)
+                      // Ideally sort by chapter number logic but append is usually safe for now
+                      update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+                  }
+             }
+             // Clear temp store
+             $this->batch_new_chapters = array();
+        }
+
         // Clear caches once for all chapters
         if (!empty($this->batch_cache_clear['chapters'])) {
             foreach (array_unique($this->batch_cache_clear['chapters']) as $chapter_id) {
