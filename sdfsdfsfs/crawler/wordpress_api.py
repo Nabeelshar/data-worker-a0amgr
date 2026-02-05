@@ -47,8 +47,9 @@ class WordPressAPI:
             )
             if response.status_code == 200:
                 result = response.json()
-                if result.get('success') and result.get('job_available'):
-                     return result
+                # Relaxed check: 'success' might not be present in all endpoints
+                if result.get('job_available') or (result.get('success') and result.get('job_available')):
+                     return result.get('job')
                 return None
             return None
         except Exception as e:
