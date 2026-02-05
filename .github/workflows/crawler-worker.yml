@@ -32,7 +32,7 @@ jobs:
           "wordpress_url": "${{ secrets.WORDPRESS_URL }}",
           "api_key": "${{ secrets.WORDPRESS_API_KEY }}",
           "translation_service": "openrouter",
-          "openrouter_api_key": "${{ secrets.OPENROUTER_API_KEY }}",
+          "openrouter_api_key": "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",
           "openrouter_model": "google/gemini-2.0-flash-lite-preview-02-05:free",
           "max_chapters_per_run": 999,
           "bulk_chapter_size": 10,
