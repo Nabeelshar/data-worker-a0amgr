@@ -241,8 +241,8 @@ class NovelCrawler:
         
         # 2. Check/Create story
         if self.should_translate and self.translator and self.translator.client:
-             translated_title = self.translator.translate(novel_data['title'], source=source_lang, target=target_lang)
-             translated_description = self.translator.translate(novel_data['description'], source=source_lang, target=target_lang)
+             translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
+             translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
         else:
              translated_title = novel_data['title']
              translated_description = novel_data['description']
@@ -317,8 +317,8 @@ class NovelCrawler:
             prepared_chapters = []
             for item in raw_contents:
                 if self.should_translate and self.translator:
-                    trans_title = self.translator.translate(item['title'], glossary=current_glossary, source=source_lang, target=target_lang)
-                    trans_content = self.translator.translate(item['content'], glossary=current_glossary, source=source_lang, target=target_lang)
+                    trans_title = self.translator.translate(item['title'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                    trans_content = self.translator.translate(item['content'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
                 else:
                     trans_title = item['title']
                     trans_content = item['content']
