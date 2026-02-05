@@ -194,13 +194,13 @@ class NovelCrawler:
             self.log(f"Processing epub: {epub_url}")
 
         self.log(f"Max chapters: {max_chapters}")
-        self.log(f"Model: {model}")
+        self.log(f"Job Requested Model: {model if model else 'Default'}")
         self.log(f"Glossary Mode: {glossary_mode}")
         
         # dynamic translator update
         if model and self.should_translate and self.translator:
             if hasattr(self.translator, 'openrouter_model') and self.translator.openrouter_model != model:
-                self.log(f"Switching model to {model}")
+                self.log(f"  Switching Translator Model to: {model}")
                 self.translator.openrouter_model = model
         
         # Simplified crawl logic tailored for jobs

@@ -30,7 +30,7 @@ class Translator:
                 return
             self.service = 'openrouter'
             self.client = True # Mark as available
-            self.logger(f"Using OpenRouter (Model: {self.openrouter_model})")
+            self.logger(f"Translator Initialized (Default Model: {self.openrouter_model})")
             return
             
         if GOOGLETRANS_AVAILABLE:
