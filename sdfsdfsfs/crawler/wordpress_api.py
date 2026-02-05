@@ -110,6 +110,9 @@ class WordPressAPI:
     
     def create_story(self, story_data):
         """Create or get existing story in WordPress"""
+        # If updating existing story (has ID), use update logic which can be implemented in the same endpoint
+        # The PHP endpoint handles both create and update.
+        
         response = self.session.post(
             f"{self.wordpress_url}/wp-json/crawler/v1/story",
             json=story_data,

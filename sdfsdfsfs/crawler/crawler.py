@@ -897,6 +897,33 @@ class NovelCrawler:
         # Summary
         self.log("\n" + "="*50)
         self.log("Crawling Complete!")
+        
+        # FINAL CACHE FLUSH: Re-update story metadata to ensure all caches are cleared and data is consistent
+        self.log("Refreshing story cache and metadata...")
+        try:
+           # Re-send the story data. The PHP endpoint is designed to update existing stories and clear their cache.
+           # We don't need to change any data, just triggering the update endpoint does the cleanup.
+           # Check/Create story section (Step 5) already has the latest metadata variables.
+           # Reuse 'story_data_final' from earlier if possible, or reconstruct minimal update.
+           
+           # We reconstruct with known data to be safe
+           final_update_data = {
+               'title': translated_title,
+               'description': translated_description,
+               'title_zh': novel_data['title'],
+               'author': novel_data['author'],
+               'url': novel_url,
+               'cover_url': novel_data['cover_url'],
+               # Cover path might be local, but URL is what matters for the API unless we upload file content (which we don't here)
+           }
+           # If we have the ID, we can assume the API uses the URL/Title to find it, 
+           # but the PHP script checks URL first.
+           
+           self.wordpress.create_story(final_update_data)
+           self.log("✓ Story cache refreshed")
+        except Exception as e:
+           self.log(f"⚠ Failed to refresh story cache: {e}")
+
         self.log("="*50)
         self.log(f"Story ID: {story_id}")
         self.log(f"Chapters created (new): {chapters_created}")
