@@ -3,6 +3,14 @@ WordPress REST API client
 """
 
 import requests
+import socket
+import requests.packages.urllib3.util.connection as urllib3_cn
+
+# FORCE IPv4 to avoid "Network is unreachable" errors on some networks (IPv6 issues)
+def allowed_gai_family():
+    return socket.AF_INET
+urllib3_cn.allowed_gai_family = allowed_gai_family
+
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
