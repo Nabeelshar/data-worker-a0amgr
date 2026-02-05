@@ -55,12 +55,11 @@ class NovelCrawler:
         # OPTIMIZATION: Batch configuration
         self.bulk_chapter_size = self.config.get('bulk_chapter_size', 50)  # Create chapters in batches (increased from 25)
     
-    def log(self, message, flush=True)
+    def log(self, message, flush=True):
+        try:
+            print(message, flush=flush)
         except UnicodeEncodeError:
-            print(message.encode('ascii', 'replace').decode('ascii'), flush=True
-            print(message)
-        except UnicodeEncodeError:
-            print(message.encode('ascii', 'replace').decode('ascii'))
+            print(message.encode('ascii', 'replace').decode('ascii'), flush=flush)
     
     def process_chapters_in_batches(self, chapters_data, story_id, novel_url, total_chapters):
         """
