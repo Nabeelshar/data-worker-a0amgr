@@ -72,13 +72,19 @@ class NovelCrawler:
         
         # Process in batches
         for batch_start in range(0, total_to_process, self.bulk_chapter_size):
-            # CHECK FOR CANCELLATION
+            # CHECK FOR CANCELLATION OR INTERFERENCE
             if job_id:
                 current_job = self.wordpress.get_job()
                 # If no job returned, or ID doesn't match, stopping
                 if not current_job or current_job.get('job_id') != job_id:
                      self.log(f"    ⚠ Job {job_id} was cancelled or removed remotely. Stopping...")
                      raise Exception("Job cancelled by user")
+                
+                # Check if another worker marked it as failed/completed
+                remote_status = current_job.get('status')
+                if remote_status in ['failed', 'completed']:
+                    self.log(f"    ⚠ Job marked as {remote_status} by another process (Ghost Worker detected). Stopping...")
+                    raise Exception(f"Job remotely marked as {remote_status}")
 
             batch_end = min(batch_start + self.bulk_chapter_size, total_to_process)
             batch_end = min(batch_start + self.bulk_chapter_size, total_to_process)
@@ -356,6 +362,10 @@ class NovelCrawler:
                     time.sleep(1) 
                 
                 if title and content:
+                    content_len = len(content)
+                    if content_len < 50:
+                        self.log(f"    ⚠ Warning: Chapter {chap_num} content is very short ({content_len} chars). Possible parsing error.")
+                    
                     raw_contents.append({
                         'num': chap_num, 
                         'title': title, 
@@ -363,6 +373,8 @@ class NovelCrawler:
                         'url': chap_info['url']
                     })
                     batch_text_context += f"{title}\n{content}\n"
+                else:
+                    self.log(f"    ⚠ Skipped Chapter {chap_num}: Unable to extract content")
             
             # Glossary Extraction
             if glossary_mode and self.should_translate and self.translator:
