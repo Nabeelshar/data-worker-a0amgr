@@ -43,8 +43,12 @@ class WordPressAPI:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         
-        # Set default headers
-        self.session.headers.update({'X-API-Key': self.api_key})
+        # Set default headers with Browser-like User-Agent to specific blocking
+        self.session.headers.update({
+            'X-API-Key': self.api_key,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*'
+        })
     
     def get_job(self):
         """Get the next crawl job from WordPress"""
