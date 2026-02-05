@@ -267,6 +267,8 @@ class Fictioneer_Novel_Crawler_REST {
                 $model = $custom_model;
             }
 
+            $target_story_id = intval($_POST['target_story_id']);
+
             $valid_request = false;
             if ($source_type === 'web' && !empty($novel_url)) {
                 $valid_request = true;
@@ -280,6 +282,7 @@ class Fictioneer_Novel_Crawler_REST {
                     'job_type' => $source_type,
                     'url' => $novel_url,
                     'epub_url' => $epub_url,
+                    'target_story_id' => $target_story_id,
                     'max_chapters' => $max_chapters,
                     'batch_size' => $batch_size,
                     'model' => $model,
@@ -464,6 +467,14 @@ class Fictioneer_Novel_Crawler_REST {
                                     <p class="description">Upload an EPUB file to process.</p>
                                 </td>
                             </tr>
+                            
+                            <tr id="row_target_story_id" style="display:none;">
+                                <th scope="row"><label for="target_story_id">Target Story ID</label></th>
+                                <td>
+                                    <input name="target_story_id" type="number" id="target_story_id" class="small-text" placeholder="e.g. 123">
+                                    <p class="description">Optional: ID of an existing story to append chapters to (Web or EPUB).</p>
+                                </td>
+                            </tr>
 
                             <tr>
                                 <th scope="row"><label for="source_lang">Language Source</label></th>
@@ -509,8 +520,9 @@ class Fictioneer_Novel_Crawler_REST {
                                 <th scope="row"><label for="model_type">AI Model</label></th>
                                 <td>
                                     <select name="model_type" id="model_type" onchange="toggleCustomModel(this.value)">
-                                        <option value="gemini-1.5-flash">Google Gemini Flash Lite</option>
-                                        <option value="gemini-1.5-pro">Google Gemini Pro</option>
+                                        <option value="google/gemini-2.5-flash">Google Gemini 2.5 Flash</option>
+                                        <option value="gemini-1.5-flash">Google Gemini Flash 1.5 Lite</option>
+                                        <option value="gemini-1.5-pro">Google Gemini Pro 1.5</option>
                                         <option value="deepseek-r1">DeepSeek R1</option>
                                         <option value="custom">Other</option>
                                     </select>
@@ -553,7 +565,11 @@ class Fictioneer_Novel_Crawler_REST {
                     const type = document.querySelector('input[name="source_type"]:checked').value;
                     const webRow = document.getElementById('row_novel_url');
                     const epubRow = document.getElementById('row_epub_file');
+                    const storyIdRow = document.getElementById('row_target_story_id');
                     
+                    // Show story ID row for both, useful for appending chapters
+                    storyIdRow.style.display = 'table-row';
+
                     if (type === 'web') {
                         webRow.style.display = 'table-row';
                         epubRow.style.display = 'none';

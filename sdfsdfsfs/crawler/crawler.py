@@ -253,31 +253,53 @@ class NovelCrawler:
             novel_data, novel_id = self.parser.parse_novel_page(novel_url)
         
         # 2. Check/Create story
-        if self.should_translate:
+        target_story_id = job_data.get('target_story_id', 0)
+        
+        if self.should_translate and target_story_id == 0:
              if not self.translator or not self.translator.client:
                  raise Exception("Transmission Required but Translator not available")
              
+             # Parallelize or sequential metadata tasks
              try:
+                 self.log(f"  generating translation...")
                  translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
                  translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+                 
+                 self.log(f"  Generating AI Metadata (Genres/Tags)...")
+                 ai_metadata = self.translator.generate_metadata(translated_title, translated_description)
+                 self.log(f"  AI Metadata: {ai_metadata}")
              except Exception as e:
                  raise Exception(f"Failed to translate metadata: {e}")
+        elif target_story_id > 0:
+             # Resume/Append mode - skip metadata generation if using existing story
+             self.log(f"  Using existing target story ID: {target_story_id}")
+             # Fetch story details if needed, or just use placeholders
+             translated_title = novel_data['title'] # Should be updated if API supported fetching story details
+             translated_description = novel_data['description']
+             ai_metadata = {'genres': [], 'tags': []}
         else:
              translated_title = novel_data['title']
              translated_description = novel_data['description']
-
-        story_data = {
-            'title': translated_title,
-            'description': translated_description,
-            'title_zh': novel_data['title'],
-            'author': novel_data['author'],
-            'url': novel_url,
-            'cover_url': novel_data['cover_url'],
-            'cover_path': None
-        }
+             ai_metadata = {'genres': [], 'tags': []}
         
-        story_result = self.wordpress.create_story(story_data)
-        story_id = story_result['id']
+        if target_story_id > 0:
+            story_id = target_story_id
+            self.log(f"  Resuming existing story ID: {story_id}")
+        else:
+            story_data = {
+                'title': translated_title,
+                'description': translated_description,
+                'title_zh': novel_data['title'],
+                'author': novel_data['author'],
+                'url': novel_url,
+                'cover_url': novel_data['cover_url'],
+                'cover_path': None,
+                'genres': ai_metadata.get('genres', []),
+                'tags': ai_metadata.get('tags', [])
+            }
+            
+            story_result = self.wordpress.create_story(story_data)
+            story_id = story_result['id']
         
         # 3. Determine chapters to process
         chapter_status = self.wordpress.get_story_chapter_status(story_id, len(novel_data['chapters']))
@@ -496,9 +518,19 @@ class NovelCrawler:
         
         # Step 4: Translate title and description
         self.log("\n[4/6] Translating metadata...")
+        ai_metadata = {'genres': [], 'tags': []}
+        
         if self.should_translate and self.translator and self.translator.client:
             # Check if already translated in metadata
             existing_metadata_path = os.path.join('novels', f'novel_{novel_id}', 'metadata.json')
+            
+            # Helper to generate AI metadata if needed
+            def ensure_ai_metadata(title, desc):
+                nonlocal ai_metadata
+                self.log(f"  Generating AI Metadata (Genres/Tags)...")
+                ai_metadata = self.translator.generate_metadata(title, desc)
+                self.log(f"  AI Metadata: {ai_metadata}")
+
             if os.path.exists(existing_metadata_path):
                 try:
                     with open(existing_metadata_path, 'r', encoding='utf-8') as f:
@@ -516,14 +548,24 @@ class NovelCrawler:
                         else:
                             translated_description = self.translator.translate(novel_data['description'])
                             self.log(f"  Description (EN): Translated")
+                        
+                        # Check for cached AI metadata or generate
+                        if existing_meta.get('genres') or existing_meta.get('tags'):
+                             ai_metadata['genres'] = existing_meta.get('genres', [])
+                             ai_metadata['tags'] = existing_meta.get('tags', [])
+                        else:
+                             ensure_ai_metadata(translated_title, translated_description)
+                             
                 except:
                     translated_title = self.translator.translate(novel_data['title'])
                     translated_description = self.translator.translate(novel_data['description'])
+                    ensure_ai_metadata(translated_title, translated_description)
                     self.log(f"  Title (EN): {translated_title}")
                     self.log(f"  Description (EN): Translated")
             else:
                 translated_title = self.translator.translate(novel_data['title'])
                 translated_description = self.translator.translate(novel_data['description'])
+                ensure_ai_metadata(translated_title, translated_description)
                 self.log(f"  Title (EN): {translated_title}")
                 self.log(f"  Description (EN): Translated")
         else:
@@ -540,7 +582,9 @@ class NovelCrawler:
             'author': novel_data['author'],
             'url': novel_url,
             'cover_url': novel_data['cover_url'],
-            'cover_path': None  # Don't download yet
+            'cover_path': None,  # Don't download yet
+            'genres': ai_metadata.get('genres', []),
+            'tags': ai_metadata.get('tags', [])
         }
         
         story_result = self.wordpress.create_story(story_data_check)

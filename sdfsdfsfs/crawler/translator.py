@@ -165,6 +165,62 @@ Text:
             return self._translate_openrouter(text, source_lang, target_lang, glossary)
         return self._translate_googletrans(text, source_lang, target_lang)
             
+    def generate_metadata(self, title, description):
+        """Generate genres and tags for the novel using LLM."""
+        if self.service != 'openrouter':
+            return {'genres': [], 'tags': []}
+            
+        prompt = f"""Analyze this novel title and description. 
+Assign suitable Genres (broad categories like Fantasy, Romance, Horror) and Tags (specific tropes, content elements).
+
+Title: {title}
+Description: {description}
+
+Output strictly valid JSON with this format:
+{{
+  "genres": ["Genre1", "Genre2"],
+  "tags": ["Tag1", "Tag2", "Tag3"]
+}}
+"""
+        
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/your-repo-link", 
+            "X-Title": "NovelCrawler" 
+        }
+        
+        data = {
+            "model": self.openrouter_model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+        
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                data=json.dumps(data),
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content'].strip()
+                    # Clean markdown
+                    if "```json" in content:
+                        content = content.split("```json")[1].split("```")[0].strip()
+                    elif "```" in content:
+                        content = content.split("```")[1].split("```")[0].strip()
+                        
+                    return json.loads(content)
+        except Exception as e:
+            self.logger(f"Metadata generation failed: {e}")
+            
+        return {'genres': [], 'tags': []}
+
     def _translate_openrouter(self, text, source, target, glossary=None):
         """Translate using OpenRouter API"""
         headers = {

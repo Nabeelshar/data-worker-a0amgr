@@ -27,6 +27,20 @@
       "chapters_total": 141,
       "story_id": 146,
       "last_updated": "2025-11-05T15:46:51.390619"
+    },
+    "https://www.ttkan.co/novel/chapters/396508": {
+      "status": "completed",
+      "chapters_crawled": 0,
+      "chapters_total": 0,
+      "story_id": 9997,
+      "last_updated": "2026-02-05T14:44:04.390233"
+    },
+    "https://www.ttkan.co/novel/chapters/longpojiutianjue-liufeng": {
+      "status": "in_progress",
+      "chapters_crawled": 10,
+      "chapters_total": 4872,
+      "story_id": 10001,
+      "last_updated": "2026-02-05T14:49:54.594637"
     }
   },
   "last_category_page": "https://www.biqiuge.com/modules/article/waps.php"

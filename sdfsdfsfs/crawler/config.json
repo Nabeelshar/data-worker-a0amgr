@@ -1,8 +1,8 @@
 {
   "wordpress_url": "https://featherquill.org",
-  "api_key": "PLACEHOLDER_USE_ENVIRONMENT_VARIABLE",
+  "api_key": "DrjKOyBOdnZrTsnFu5xVyT28SDZuEeBW",
   "translation_service": "openrouter",
-  "openrouter_api_key": "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",
+  "openrouter_api_key": "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",
   "openrouter_model": "google/gemini-2.5-flash",
   "google_project_id": "",
   "google_credentials_file": "",

@@ -53,6 +53,22 @@ class Fictioneer_Crawler_Rest_API {
                     'type' => 'string',
                     'sanitize_callback' => 'sanitize_url',
                 ),
+                'genres' => array(
+                    'required' => false,
+                    'type' => 'array',
+                    'items' => array(
+                        'type' => 'string',
+                        'sanitize_callback' => 'sanitize_text_field',
+                    ),
+                ),
+                'tags' => array(
+                    'required' => false,
+                    'type' => 'array',
+                    'items' => array(
+                        'type' => 'string',
+                        'sanitize_callback' => 'sanitize_text_field',
+                    ),
+                ),
             ),
         ));
         
@@ -284,6 +300,17 @@ class Fictioneer_Crawler_Rest_API {
             if ($author) update_post_meta($story_id, 'fictioneer_story_author', $author);
             if ($cover_url) $this->set_story_cover($story_id, $cover_url);
             
+            // Update taxonomies
+            $genres = $request->get_param('genres');
+            if (!empty($genres) && is_array($genres)) {
+                wp_set_object_terms($story_id, $genres, 'fcn_genre');
+            }
+            
+            $tags = $request->get_param('tags');
+            if (!empty($tags) && is_array($tags)) {
+                wp_set_object_terms($story_id, $tags, 'post_tag');
+            }
+
             // Story exists - no need to trigger full hooks
             return array(
                 'success' => true,
@@ -341,6 +368,17 @@ class Fictioneer_Crawler_Rest_API {
             $this->set_story_cover($story_id, $cover_url);
         }
         
+        // Set taxonomies
+        $genres = $request->get_param('genres');
+        if (!empty($genres) && is_array($genres)) {
+            wp_set_object_terms($story_id, $genres, 'fcn_genre');
+        }
+        
+        $tags = $request->get_param('tags');
+        if (!empty($tags) && is_array($tags)) {
+            wp_set_object_terms($story_id, $tags, 'post_tag');
+        }
+
         // Log activity
         $this->log_activity('Story created', array(
             'story_id' => $story_id,
@@ -879,25 +917,40 @@ class Fictioneer_Crawler_Rest_API {
         $status = $request->get_param('status');
         $message = $request->get_param('message');
         
-        $job = get_option('fictioneer_crawler_current_job');
+        $job_queue = get_option('fictioneer_crawler_current_job');
         
-        if (empty($job) || !is_array($job)) {
+        if (empty($job_queue)) {
             // Initialize if not valid, but log it
-            $job = array();
             $this->log_activity('Receiving status update for empty job', array('status' => $status));
+            return array('success' => false, 'message' => 'No job found');
         }
         
-        $job['status'] = $status;
-        if (!empty($message)) {
-            $job['message'] = $message;
+        // Handle queue structure (array of jobs)
+        if (isset($job_queue[0]) && is_array($job_queue[0])) {
+            $job_queue[0]['status'] = $status;
+            if (!empty($message)) {
+                $job_queue[0]['message'] = $message;
+            }
+            $job_queue[0]['last_updated'] = current_time('mysql');
+            
+            // If completed or failed, maybe remove from queue? 
+            // For now, keep it so user can see result in Control Panel, 
+            // but Control Panel assumes job[0] is active.
+            // Best practice: Keep it marked as completed.
+        } else {
+             // Backward compatibility or malformed structure
+             $job_queue['status'] = $status;
+             if (!empty($message)) {
+                 $job_queue['message'] = $message;
+             }
+             $job_queue['last_updated'] = current_time('mysql');
         }
-        $job['last_updated'] = current_time('mysql');
         
-        update_option('fictioneer_crawler_current_job', $job);
+        update_option('fictioneer_crawler_current_job', $job_queue);
         
         return array(
             'success' => true,
-            'job' => $job,
+            'job' => isset($job_queue[0]) ? $job_queue[0] : $job_queue,
         );
     }
 
