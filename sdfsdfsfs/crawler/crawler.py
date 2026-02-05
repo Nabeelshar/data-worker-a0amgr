@@ -387,7 +387,64 @@ class NovelCrawler:
             batch = chapters_to_do[b_idx * batch_size : (b_idx + 1) * batch_size]
             self.log(f"Processing batch {b_idx + 1}/{total_batches} ({len(batch)} chapters) [Glossary Context Mode]")
             
-            # ... (rest of gathering and translation code) ...
+            # Fetch Raw Content
+            raw_contents = [] 
+            batch_text_context = ""
+            
+            for chap_num, chap_info in batch:
+                if job_type == 'epub':
+                     title = chap_info.get('title')
+                     content = chap_info.get('content')
+                else:
+                    title, content = self.parser.parse_chapter_page(chap_info['url'])
+                    time.sleep(1) 
+                
+                if title and content:
+                    content_len = len(content)
+                    if content_len < 50:
+                        self.log(f"    ⚠ Warning: Chapter {chap_num} content is very short ({content_len} chars). Possible parsing error.")
+                    
+                    raw_contents.append({
+                        'num': chap_num, 
+                        'title': title, 
+                        'content': content,
+                        'url': chap_info['url']
+                    })
+                    batch_text_context += f"{title}\n{content}\n"
+                else:
+                    self.log(f"    ⚠ Skipped Chapter {chap_num}: Unable to extract content")
+            
+            # Glossary Extraction
+            if glossary_mode and self.should_translate and self.translator:
+                self.log("Generating/Updating glossary...")
+                try:
+                    # Pass limited context to avoid token limits
+                    current_glossary = self.translator.extract_glossary(batch_text_context[:10000], current_glossary)
+                    self.file_manager.save_glossary(novel_id, current_glossary)
+                except Exception as e:
+                    raise Exception(f"Glossary extraction failed (Required): {e}")
+
+            # Translate & Upload
+            prepared_chapters = []
+            for item in raw_contents:
+                if self.should_translate:
+                    try:
+                        trans_title = self.translator.translate(item['title'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                        trans_content = self.translator.translate(item['content'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                    except Exception as e:
+                         raise Exception(f"Chapter translation failed (Required): {e}")
+                else:
+                    trans_title = item['title']
+                    trans_content = item['content']
+                
+                prepared_chapters.append({
+                    'title': f"{translated_title} Chapter {item['num']}",
+                    'title_zh': item['title'],
+                    'content': trans_content,
+                    'story_id': story_id,
+                    'url': item['url'],
+                    'chapter_number': item['num']
+                })
             
             # Upload Batch - This will internally use bulk_chapter_size=1 to split this batch of 5
             if prepared_chapters:
