@@ -180,7 +180,7 @@ class NovelCrawler:
         novel_url = job_data.get('url')
         max_chapters = job_data.get('max_chapters', 10)
         model = job_data.get('model')
-        glossary_mode = job_data.get('glossary_mode', False)
+        glossary_mode = job_data.get('glossary', job_data.get('glossary_mode', False))
         
         job_type = job_data.get('job_type', 'web')
         epub_url = job_data.get('epub_url')
