@@ -20,6 +20,9 @@ from config_loader import load_config
 class NovelCrawler:
     def __init__(self, config_path='config.json'):
         """Initialize the crawler with configuration"""
+        # Force unbuffered output globally (Python 3.7+)
+        sys.stdout.reconfigure(line_buffering=True)
+        
         self.config = load_config(config_path)
         
         # Configuration
@@ -52,9 +55,9 @@ class NovelCrawler:
         # OPTIMIZATION: Batch configuration
         self.bulk_chapter_size = self.config.get('bulk_chapter_size', 50)  # Create chapters in batches (increased from 25)
     
-    def log(self, message):
-        """Print log message with Unicode error handling"""
-        try:
+    def log(self, message, flush=True)
+        except UnicodeEncodeError:
+            print(message.encode('ascii', 'replace').decode('ascii'), flush=True
             print(message)
         except UnicodeEncodeError:
             print(message.encode('ascii', 'replace').decode('ascii'))
@@ -761,7 +764,7 @@ def main():
             crawler = NovelCrawler()
             crawler.run_worker_mode()
         except Exception as e:
-            print(f"Worker Error: {e}")
+            print(f"Worker Error: {e}", flush=True)
             import traceback
             traceback.print_exc()
         return
@@ -796,12 +799,12 @@ def main():
             elif '/books/' in url:
                 crawler.crawl_novel(url)
             else:
-                print(f"Error: Unknown URL type: {url}")
-                print("URL should contain '/novel/rank' (category) or '/novel/chapters/' (novel)")
+                print(f"Error: Unknown URL type: {url}", flush=True)
+                print("URL should contain '/novel/rank' (category) or '/novel/chapters/' (novel)", flush=True)
                 sys.exit(1)
             
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", flush=True)
         import traceback
         traceback.print_exc()
         sys.exit(1)
