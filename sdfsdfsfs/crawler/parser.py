@@ -6,19 +6,86 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import json
+import time
+import random
+
+try:
+    import cloudscraper
+except ImportError:
+    cloudscraper = None
+
+try:
+    from fake_useragent import UserAgent
+except ImportError:
+    UserAgent = None
 
 
 class NovelParser:
     def __init__(self, logger):
         self.logger = logger
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        self.ua = UserAgent() if UserAgent else None
+        
+        # Initialize session with browser-like behavior
+        if cloudscraper:
+            try:
+                self.session = cloudscraper.create_scraper(
+                    browser={
+                        'browser': 'chrome',
+                        'platform': 'windows',
+                        'desktop': True
+                    },
+                    delay=10
+                )
+                self.logger("Initialized CloudScraper session")
+            except Exception as e:
+                self.logger(f"Failed to init CloudScraper: {e}, falling back to requests")
+                self.session = requests.Session()
+        else:
+            self.session = requests.Session()
+            
+        # Common headers for both requests/cloudscraper
+        headers = {
+            'User-Agent': self.get_random_ua(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+        }
+        self.session.headers.update(headers)
     
+    def get_random_ua(self):
+        if self.ua:
+            try:
+                return self.ua.random
+            except:
+                pass
+        return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+
     def parse_novel_page(self, url):
         """Parse novel page to extract metadata and chapter list"""
-        response = self.session.get(url)
+        # Random delay before request to behave like human
+        time.sleep(random.uniform(1, 3))
+        
+        # Update referer for specific requests
+        domain = 'https://www.ttkan.co'
+        self.session.headers.update({'Referer': domain})
+        
+        try:
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+        except Exception as e:
+            self.logger(f"Request failed: {e}. Retrying with new session...")
+            # Re-init session on failure
+            self.__init__(self.logger)
+            time.sleep(5)
+            response = self.session.get(url, timeout=30)
+
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.content, 'lxml')
         

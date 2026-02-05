@@ -4,3 +4,5 @@ lxml>=4.9.0
 googletrans==4.0.0rc1
 urllib3>=2.0.0
 EbookLib>=0.17.1
+cloudscraper>=1.2.71
+fake-useragent>=1.4.0
