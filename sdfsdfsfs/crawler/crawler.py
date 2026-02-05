@@ -131,6 +131,9 @@ class NovelCrawler:
         self.log("Starting Crawler Worker Mode")
         self.log("="*50 + "\n")
         
+        # Keep track of processed jobs to avoid loops
+        processed_job_ids = set()
+        
         while True:
             try:
                 self.log("Polling for jobs...")
@@ -145,10 +148,19 @@ class NovelCrawler:
                             self.log("Received empty job list")
                             continue
 
-                    self.log(f"Job received! ID: {job.get('job_id')}")
+                    job_id = job.get('job_id')
+                    job_status = job.get('status', 'pending')
+                    
+                    # Prevent processing completed/failed jobs to avoid loops
+                    # ALSO check our local history
+                    if job_status in ['completed', 'failed'] or job_id in processed_job_ids:
+                        self.log(f"Job {job_id} already processed (Status: {job_status}). Waiting for new job...")
+                        time.sleep(30)
+                        continue
+
+                    self.log(f"Job received! ID: {job_id}")
                     
                     # Update status to processing
-                    job_id = job.get('job_id')
                     if job_id:
                         self.wordpress.update_job_status(job_id, 'processing', 'Starting job...')
                     
@@ -156,6 +168,7 @@ class NovelCrawler:
                         self.process_job(job)
                         if job_id:
                             self.wordpress.update_job_status(job_id, 'completed', 'Job completed successfully')
+                            processed_job_ids.add(job_id) # Mark as done locallly
                     except Exception as e:
                         self.log(f"Job failed: {e}")
                         import traceback

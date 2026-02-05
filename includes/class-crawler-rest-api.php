@@ -257,11 +257,38 @@ class Fictioneer_Crawler_Rest_API {
         }
         
         if (!empty($existing)) {
-            // Story exists - no need to clear cache or trigger hooks
+            $story_id = $existing[0]->ID;
+            
+            // STORY EXISTS: Update Title/Description if provided (fixes translation updates)
+            $update_data = array('ID' => $story_id);
+            $updated = false;
+            
+            if (!empty($title) && $title !== $existing[0]->post_title) {
+                $update_data['post_title'] = $title;
+                $updated = true;
+            }
+            
+            if (!empty($description) && $description !== $existing[0]->post_content) {
+                $update_data['post_content'] = $description;
+                $updated = true;
+            }
+            
+            if ($updated) {
+                wp_update_post($update_data);
+                if (!$this->batch_in_progress) {
+                    clean_post_cache($story_id);
+                }
+            }
+            
+            // Update other meta regardless
+            if ($author) update_post_meta($story_id, 'fictioneer_story_author', $author);
+            if ($cover_url) $this->set_story_cover($story_id, $cover_url);
+            
+            // Story exists - no need to trigger full hooks
             return array(
                 'success' => true,
-                'story_id' => $existing[0]->ID,
-                'message' => 'Story already exists',
+                'story_id' => $story_id,
+                'message' => 'Story updated',
                 'existed' => true,
             );
         }
