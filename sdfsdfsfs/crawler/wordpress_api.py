@@ -51,7 +51,7 @@ class WordPressAPI:
         try:
             response = self.session.get(
                 f"{self.wordpress_url}/wp-json/crawler/v1/job",
-                timeout=10
+                timeout=30  # Increased timeout for stability
             )
             if response.status_code == 200:
                 result = response.json()
@@ -73,7 +73,7 @@ class WordPressAPI:
             response = self.session.post(
                 f"{self.wordpress_url}/wp-json/crawler/v1/job/status",
                 json={'status': status, 'message': message},
-                timeout=10
+                timeout=30  # Increased timeout for status updates
             )
             return response.status_code == 200
          except Exception as e:
