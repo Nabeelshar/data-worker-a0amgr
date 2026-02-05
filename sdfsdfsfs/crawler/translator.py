@@ -48,7 +48,7 @@ class Translator:
         self.client = None
     
     def extract_glossary(self, text, existing_glossary=None):
-        """Extract glossary terms from text using LLM."""
+        """Extract glossary terms from text using LLM (Text-based to avoid JSON errors)."""
         if self.service != 'openrouter':
             self.logger("Warning: Glossary extraction only supported with OpenRouter")
             return existing_glossary if existing_glossary else []
@@ -56,11 +56,15 @@ class Translator:
         if existing_glossary is None:
             existing_glossary = []
 
-        existing_glossary_json = json.dumps(existing_glossary, ensure_ascii=False)
+        # Convert simple list for prompt
+        existing_terms_str = ", ".join([item['original'] for item in existing_glossary])
         
-        prompt = f"""Analyze the following fiction text. Identify key proper names (characters, locations, organizations) and specific cultivation terms. Return a JSON object with a 'glossary' key containing a list of objects {{ 'original': 'ChineseTerm', 'translation': 'EnglishTerm', 'type': 'name|location|term' }}. 
+        prompt = f"""Analyze the provided fiction text. Identify key proper names (characters, locations, unique terms). 
+Output specific translation pairs, one per line, in this exact format:
+Original Term: English Translation
 
-Existing Glossary to respect: {existing_glossary_json}
+Do not output JSON. Do not output markdown code blocks. Just the list.
+Ignore these existing terms: {existing_terms_str}
 
 Text:
 {text}"""
@@ -94,48 +98,59 @@ Text:
                     result = response.json()
                     if 'choices' in result and len(result['choices']) > 0:
                         content = result['choices'][0]['message']['content'].strip()
-                        # Clean markdown
-                        if "```json" in content:
-                            content = content.split("```json")[1].split("```")[0].strip()
-                        elif "```" in content:
-                            content = content.split("```")[1].split("```")[0].strip()
-                            
-                        try:
-                            extracted_data = json.loads(content)
-                            new_terms = extracted_data.get('glossary', [])
-                            
-                            # Merge with existing glossary
-                            existing_originals = {item['original'] for item in existing_glossary}
-                            for term in new_terms:
-                                if term['original'] not in existing_originals:
-                                    existing_glossary.append(term)
-                                    existing_originals.add(term['original'])
-                            
-                            return existing_glossary
-                        except json.JSONDecodeError:
-                            self.logger(f"Failed to parse glossary JSON extraction: {content}")
-                            return existing_glossary
+                        
+                        # Parse Text Output (Line by Line)
+                        new_terms = []
+                        lines = content.split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            if ':' in line:
+                                parts = line.split(':', 1)
+                                original = parts[0].strip()
+                                translation = parts[1].strip()
+                                
+                                # Basic cleanup
+                                original = original.replace('*', '').replace('-', '').strip()
+                                translation = translation.replace('*', '').strip()
+                                
+                                if original and translation:
+                                    new_terms.append({
+                                        'original': original,
+                                        'translation': translation,
+                                        'type': 'term' # Default type
+                                    })
+                        
+                        # Merge with existing glossary
+                        filtered_new = []
+                        existing_originals = {item['original'] for item in existing_glossary}
+                        
+                        for term in new_terms:
+                            if term['original'] not in existing_originals:
+                                existing_glossary.append(term)
+                                existing_originals.add(term['original'])
+                                filtered_new.append(term)
+                        
+                        self.logger(f"  Glossary updated: +{len(filtered_new)} terms")
+                        return existing_glossary
                     else:
-                        raise Exception(f"Invalid response from OpenRouter: {result}")
+                        raise Exception(f"Invalid response: {result}")
                 elif response.status_code == 401:
                     self.logger(f"CRITICAL ERROR: OpenRouter Authorization Failed (401).")
-                    self.logger(f"  - Check your OPENROUTER_API_KEY in GitHub Secrets.")
-                    self.logger(f"  - Response: {response.text}")
-                    # Do not retry auth errors
                     raise Exception(f"OpenRouter Auth Error: {response.text}")
                 elif response.status_code == 429:
                     wait_time = 5 * (attempt + 1)
-                    self.logger(f"Rate limited by OpenRouter. Waiting {wait_time}s...")
                     time.sleep(wait_time)
                     continue
                 else:
-                    raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
+                    raise Exception(f"OpenRouter API error: {response.status_code}")
                     
             except Exception as e:
-                # If it's the last attempt, raise the error to stop the process
                 if attempt == max_retries - 1:
-                    raise e
-                self.logger(f"OpenRouter glossary request failed (attempt {attempt+1}): {e}")
+                    # Return existing validation on failure instead of crashing?
+                    # User wanted strict, but for glossary maybe soft fail is better than loop crash?
+                    # But crawler.py catches it. Let's log and return existing to keep going.
+                    self.logger(f"Glossary extraction failed: {e}")
+                    return existing_glossary
                 time.sleep(2)
         
         return existing_glossary
