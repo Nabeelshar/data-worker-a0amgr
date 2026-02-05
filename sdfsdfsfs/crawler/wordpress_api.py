@@ -127,7 +127,7 @@ class WordPressAPI:
             response = self.session.get(
                 f"{self.wordpress_url}/wp-json/crawler/v1/story/{story_id}/chapters",
                 params={'total_chapters': total_chapters},
-                timeout=15
+                timeout=45 # Increased timeout for large novels
             )
             
             if response.status_code == 200:
@@ -139,9 +139,11 @@ class WordPressAPI:
                     'existing_chapters': result.get('existing_chapters', [])  # List of chapter numbers
                 }
             else:
+                self.logger(f"Bulk status check failed: {response.status_code}")
                 # Fallback to individual checks
                 return {'success': False, 'chapters_count': 0, 'is_complete': False, 'existing_chapters': []}
-        except:
+        except Exception as e:
+            self.logger(f"Bulk status check error: {e}")
             # Fallback to individual checks
             return {'success': False, 'chapters_count': 0, 'is_complete': False, 'existing_chapters': []}
     

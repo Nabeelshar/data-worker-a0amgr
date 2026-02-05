@@ -246,7 +246,62 @@ class NovelParser:
     
     def parse_chapter_page(self, url):
         """Parse chapter page to extract content"""
-        response = self.session.get(url)
+        # Retry logic for connection stability
+        max_retries = 4
+        response = None
+        
+        for attempt in range(max_retries):
+            try:
+                # Random delay to be polite and avoid detection
+                if attempt > 0:
+                    time.sleep(random.uniform(2, 5))
+                
+                response = self.session.get(url, timeout=30)
+                response.raise_for_status()
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    sleep_time = (attempt + 1) * 3
+                    self.logger(f"Network error fetching chapter (Attempt {attempt+1}/{max_retries}): {e}. Retrying in {sleep_time}s...")
+                    time.sleep(sleep_time)
+                    # Re-initialize session on connection errors
+                    try:
+                        self.session.close()
+                    except:
+                        pass
+                    
+                    # Re-create session
+                    if cloudscraper:
+                        try:
+                            self.session = cloudscraper.create_scraper(
+                                browser={'browser': 'chrome','platform': 'windows','desktop': True},
+                                delay=10
+                            )
+                        except:
+                            self.session = requests.Session()
+                    else:
+                        self.session = requests.Session()
+                    
+                    # Restore headers
+                    headers = {
+                        'User-Agent': self.get_random_ua(),
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Cache-Control': 'max-age=0',
+                    }
+                    self.session.headers.update(headers)
+                    # Update referer
+                    self.session.headers.update({'Referer': 'https://www.ttkan.co'})
+                else:
+                    self.logger(f"Failed to fetch chapter after {max_retries} attempts: {url}")
+                    return None, None
+
+        if not response:
+             return None, None
+
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.content, 'lxml')
         
