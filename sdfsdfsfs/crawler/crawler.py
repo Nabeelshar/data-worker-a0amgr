@@ -61,7 +61,7 @@ class NovelCrawler:
         except UnicodeEncodeError:
             print(message.encode('ascii', 'replace').decode('ascii'), flush=flush)
     
-    def process_chapters_in_batches(self, chapters_data, story_id, novel_url, total_chapters):
+    def process_chapters_in_batches(self, chapters_data, story_id, novel_url, total_chapters, job_id=None):
         """
         Process chapters in batches for optimal performance
         CRITICAL: Maintains sequential order of chapters
@@ -72,6 +72,15 @@ class NovelCrawler:
         
         # Process in batches
         for batch_start in range(0, total_to_process, self.bulk_chapter_size):
+            # CHECK FOR CANCELLATION
+            if job_id:
+                current_job = self.wordpress.get_job()
+                # If no job returned, or ID doesn't match, stopping
+                if not current_job or current_job.get('job_id') != job_id:
+                     self.log(f"    ⚠ Job {job_id} was cancelled or removed remotely. Stopping...")
+                     raise Exception("Job cancelled by user")
+
+            batch_end = min(batch_start + self.bulk_chapter_size, total_to_process)
             batch_end = min(batch_start + self.bulk_chapter_size, total_to_process)
             batch = chapters_data[batch_start:batch_end]
             
@@ -323,6 +332,13 @@ class NovelCrawler:
         total_batches = (len(chapters_to_do) + batch_size - 1) // batch_size
         
         for b_idx in range(total_batches):
+            # CHECK FOR CANCELLATION
+            if job_data.get('job_id'):
+                current_job_check = self.wordpress.get_job()
+                if not current_job_check or current_job_check.get('job_id') != job_data.get('job_id'):
+                     self.log(f"    ⚠ Job cancelled or removed. Stopping...")
+                     return # Exit cleanly
+
             batch = chapters_to_do[b_idx * batch_size : (b_idx + 1) * batch_size]
             self.log(f"Processing batch {b_idx + 1}/{total_batches} ({len(batch)} chapters)")
             
@@ -803,7 +819,7 @@ class NovelCrawler:
         if prepared_chapters:
             self.log(f"\n  Phase 2: Uploading {len(prepared_chapters)} chapters to WordPress...")
             chapters_created, chapters_uploaded_existed = self.process_chapters_in_batches(
-                prepared_chapters, story_id, novel_url, len(novel_data['chapters'])
+                prepared_chapters, story_id, novel_url, len(novel_data['chapters']), job_data.get('job_id')
             )
         else:
             chapters_created = 0
