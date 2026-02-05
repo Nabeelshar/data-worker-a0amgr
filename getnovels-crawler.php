@@ -276,6 +276,7 @@ class Fictioneer_Novel_Crawler_REST {
 
             if ($valid_request) {
                  $job_data = array(
+                    'job_id' => uniqid('job_'),
                     'job_type' => $source_type,
                     'url' => $novel_url,
                     'epub_url' => $epub_url,

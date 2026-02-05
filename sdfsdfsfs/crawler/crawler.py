@@ -148,16 +148,20 @@ class NovelCrawler:
                     self.log(f"Job received! ID: {job.get('job_id')}")
                     
                     # Update status to processing
-                    self.wordpress.update_job_status(job['job_id'], 'processing', 'Starting job...')
+                    job_id = job.get('job_id')
+                    if job_id:
+                        self.wordpress.update_job_status(job_id, 'processing', 'Starting job...')
                     
                     try:
                         self.process_job(job)
-                        self.wordpress.update_job_status(job['job_id'], 'completed', 'Job completed successfully')
+                        if job_id:
+                            self.wordpress.update_job_status(job_id, 'completed', 'Job completed successfully')
                     except Exception as e:
                         self.log(f"Job failed: {e}")
                         import traceback
                         traceback.print_exc()
-                        self.wordpress.update_job_status(job['job_id'], 'failed', str(e))
+                        if job_id:
+                            self.wordpress.update_job_status(job_id, 'failed', str(e))
                 
                 else:
                     self.log("No jobs available. Sleeping 30s...")

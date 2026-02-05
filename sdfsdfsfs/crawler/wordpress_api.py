@@ -59,8 +59,11 @@ class WordPressAPI:
     def update_job_status(self, job_id, status, message):
          """Update job status"""
          try:
+            # PHP endpoint registers /job/status, not /job/{id}/status
+            # We assume PHP handles the current job regardless of ID, or expects ID in body
+            # But the register_rest_route doesn't define ID param in URL.
             response = self.session.post(
-                f"{self.wordpress_url}/wp-json/crawler/v1/job/{job_id}/status",
+                f"{self.wordpress_url}/wp-json/crawler/v1/job/status",
                 json={'status': status, 'message': message},
                 timeout=10
             )
