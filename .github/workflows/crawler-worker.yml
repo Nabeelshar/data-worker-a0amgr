@@ -33,7 +33,7 @@ jobs:
           "api_key": "${{ secrets.WORDPRESS_API_KEY }}",
           "translation_service": "openrouter",
           "openrouter_api_key": "${{ secrets.OPENROUTER_API_KEY }}",
-          "openrouter_model": "google/gemini-2.5-flash-lite",
+          "openrouter_model": "google/gemini-2.5-flash",
           "max_chapters_per_run": 999,
           "bulk_chapter_size": 10,
           "delay_between_requests": 1,
