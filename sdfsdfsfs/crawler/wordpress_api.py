@@ -55,7 +55,7 @@ class WordPressAPI:
         try:
             response = self.session.get(
                 f"{self.wordpress_url}/wp-json/crawler/v1/job",
-                timeout=30  # Increased timeout for stability
+                timeout=60  # Increased timeout for stability
             )
             if response.status_code == 200:
                 result = response.json()
@@ -113,7 +113,7 @@ class WordPressAPI:
         response = self.session.post(
             f"{self.wordpress_url}/wp-json/crawler/v1/story",
             json=story_data,
-            timeout=30
+            timeout=60
         )
         
         if response.status_code in [200, 201]:
@@ -178,7 +178,7 @@ class WordPressAPI:
         response = self.session.post(
             f"{self.wordpress_url}/wp-json/crawler/v1/chapter",
             json=chapter_data,
-            timeout=30
+            timeout=60
         )
         
         if response.status_code in [200, 201]:
