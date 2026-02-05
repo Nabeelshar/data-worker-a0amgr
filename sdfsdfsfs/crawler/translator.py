@@ -122,7 +122,7 @@ Text:
                     self.logger(f"  - Check your OPENROUTER_API_KEY in GitHub Secrets.")
                     self.logger(f"  - Response: {response.text}")
                     # Do not retry auth errors
-                    return existing_glossary
+                    raise Exception(f"OpenRouter Auth Error: {response.text}")
                 elif response.status_code == 429:
                     wait_time = 5 * (attempt + 1)
                     self.logger(f"Rate limited by OpenRouter. Waiting {wait_time}s...")
@@ -132,9 +132,9 @@ Text:
                     raise Exception(f"OpenRouter API error: {response.status_code} - {response.text}")
                     
             except Exception as e:
+                # If it's the last attempt, raise the error to stop the process
                 if attempt == max_retries - 1:
-                    self.logger(f"Glossary extraction failed: {e}")
-                    return existing_glossary
+                    raise e
                 self.logger(f"OpenRouter glossary request failed (attempt {attempt+1}): {e}")
                 time.sleep(2)
         
@@ -143,16 +143,12 @@ Text:
     def translate(self, text, source_lang='zh-CN', target_lang='en', glossary=None):
         """Translate text using configured service"""
         if not self.client:
-            self.logger("Warning: No translator available")
-            return text
+            raise Exception("No translator available")
         
-        try:
-            if self.service == 'openrouter':
-                return self._translate_openrouter(text, source_lang, target_lang, glossary)
-            return self._translate_googletrans(text, source_lang, target_lang)
-        except Exception as e:
-            self.logger(f"Translation error: {e}")
-            return text
+        # Remove internal try-except to allow catching errors in main loop
+        if self.service == 'openrouter':
+            return self._translate_openrouter(text, source_lang, target_lang, glossary)
+        return self._translate_googletrans(text, source_lang, target_lang)
             
     def _translate_openrouter(self, text, source, target, glossary=None):
         """Translate using OpenRouter API"""

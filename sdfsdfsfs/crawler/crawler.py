@@ -240,9 +240,15 @@ class NovelCrawler:
             novel_data, novel_id = self.parser.parse_novel_page(novel_url)
         
         # 2. Check/Create story
-        if self.should_translate and self.translator and self.translator.client:
-             translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
-             translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+        if self.should_translate:
+             if not self.translator or not self.translator.client:
+                 raise Exception("Transmission Required but Translator not available")
+             
+             try:
+                 translated_title = self.translator.translate(novel_data['title'], source_lang=source_lang, target_lang=target_lang)
+                 translated_description = self.translator.translate(novel_data['description'], source_lang=source_lang, target_lang=target_lang)
+             except Exception as e:
+                 raise Exception(f"Failed to translate metadata: {e}")
         else:
              translated_title = novel_data['title']
              translated_description = novel_data['description']
@@ -309,16 +315,22 @@ class NovelCrawler:
             # Glossary Extraction
             if glossary_mode and self.should_translate and self.translator:
                 self.log("Generating/Updating glossary...")
-                # Pass limited context to avoid token limits
-                current_glossary = self.translator.extract_glossary(batch_text_context[:10000], current_glossary)
-                self.file_manager.save_glossary(novel_id, current_glossary)
-            
+                try:
+                    # Pass limited context to avoid token limits
+                    current_glossary = self.translator.extract_glossary(batch_text_context[:10000], current_glossary)
+                    self.file_manager.save_glossary(novel_id, current_glossary)
+                except Exception as e:
+                    raise Exception(f"Glossary extraction failed (Required): {e}")
+
             # Translate & Upload
             prepared_chapters = []
             for item in raw_contents:
-                if self.should_translate and self.translator:
-                    trans_title = self.translator.translate(item['title'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
-                    trans_content = self.translator.translate(item['content'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                if self.should_translate:
+                    try:
+                        trans_title = self.translator.translate(item['title'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                        trans_content = self.translator.translate(item['content'], glossary=current_glossary, source_lang=source_lang, target_lang=target_lang)
+                    except Exception as e:
+                         raise Exception(f"Chapter translation failed (Required): {e}")
                 else:
                     trans_title = item['title']
                     trans_content = item['content']
