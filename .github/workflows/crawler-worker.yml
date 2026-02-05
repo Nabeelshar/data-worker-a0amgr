@@ -1,0 +1,50 @@
+name: Novels Crawler Worker
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:       # Allow manual trigger
+
+jobs:
+  crawler-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350   # 5 hours 50 minutes (exit just before 6h limit)
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        cd sdfsdfsfs/crawler
+        pip install -r requirements.txt
+        pip install EbookLib  # Ensure this is installed if missing from requirements
+
+    - name: Create Configuration
+      run: |
+        cat <<EOF > sdfsdfsfs/crawler/config.json
+        {
+          "wordpress_url": "${{ secrets.WORDPRESS_URL }}",
+          "api_key": "${{ secrets.WORDPRESS_API_KEY }}",
+          "translation_service": "openrouter",
+          "openrouter_api_key": "${{ secrets.OPENROUTER_API_KEY }}",
+          "openrouter_model": "google/gemini-2.0-flash-lite-preview-02-05:free",
+          "max_chapters_per_run": 999,
+          "bulk_chapter_size": 10,
+          "delay_between_requests": 1,
+          "translate": true,
+          "default_source_lang": "zh-CN",
+          "default_target_lang": "en"
+        }
+        EOF
+
+    - name: Run Crawler Worker
+      run: |
+        cd sdfsdfsfs/crawler
+        # Run in worker mode. It runs until timeout or manual cancellation.
+        python crawler.py --worker
