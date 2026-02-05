@@ -452,6 +452,22 @@ class NovelCrawler:
             
             self.wordpress.update_job_status(job_data['job_id'], 'processing', f"Processed batch {b_idx + 1}/{total_batches}")
 
+        # REFRESH CACHE: Final story update to ensure chapter lists and caches are consistent
+        self.log("Refreshing story cache and metadata...")
+        try:
+           story_update_data = {
+               'title': translated_title,
+               'description': translated_description,
+               'title_zh': novel_data['title'],
+               'author': novel_data['author'],
+               'url': novel_url,
+               'cover_url': novel_data['cover_url'],
+           }
+           self.wordpress.create_story(story_update_data)
+           self.log("✓ Story cache refreshed")
+        except Exception as e:
+           self.log(f"⚠ Failed to refresh story cache: {e}")
+
     def crawl_category(self, category_url, max_pages=None):
         """Crawl all novels from a category page with pagination"""
         self.log("\n" + "="*50)
