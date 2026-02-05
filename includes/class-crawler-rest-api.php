@@ -558,49 +558,72 @@ class Fictioneer_Crawler_Rest_API {
             update_post_meta($chapter_id, 'fictioneer_chapter_title_original', $title_zh);
         }
         
-        // Append chapter to story's chapter list (avoid duplicates)
-        $story_chapters = get_post_meta($story_id, 'fictioneer_story_chapters', true);
-        if (!is_array($story_chapters)) {
-            $story_chapters = array();
-        }
+        // OPTIMIZATION: Use theme native function to append chapter if available
+        // This ensures cache clearing, Next/Prev links, and word counts are updated correctly
+        update_post_meta($chapter_id, '_fictioneer_chapter_appended', true);
         
-        // Only add if not already in the list
-        if (!in_array($chapter_id, $story_chapters)) {
-            // If in batch mode, don't update meta yet to prevent race conditions/cache issues
-            if ($this->batch_in_progress) {
-                if (!isset($this->batch_new_chapters[$story_id])) {
-                        $this->batch_new_chapters[$story_id] = array();
-                }
-                if (!in_array($chapter_id, $this->batch_new_chapters[$story_id])) {
-                        $this->batch_new_chapters[$story_id][] = $chapter_id;
-                }
-            } else {
-                $story_chapters[] = $chapter_id;
-                update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+        $appended_via_function = false;
+        if (function_exists('fictioneer_append_chapter_to_story')) {
+            fictioneer_append_chapter_to_story($chapter_id, intval($story_id));
+            $appended_via_function = true;
+        }
+
+        // Fallback or Batch Mode Handling
+        // Even if function exists, we might need manual handling if we are in specific batch modes
+        // or if the function failed (though it returns void/null usually)
+        
+        // Append chapter to story's chapter list (avoid duplicates)
+        // We still check this manual array for our internal tracking or if function is missing
+        if (!$appended_via_function) {
+            $story_chapters = get_post_meta($story_id, 'fictioneer_story_chapters', true);
+            if (!is_array($story_chapters)) {
+                $story_chapters = array();
             }
             
-            // Update crawler progress tracking
+            // Only add if not already in the list
+            if (!in_array($chapter_id, $story_chapters)) {
+                // If in batch mode, don't update meta yet to prevent race conditions/cache issues
+                if ($this->batch_in_progress) {
+                    if (!isset($this->batch_new_chapters[$story_id])) {
+                            $this->batch_new_chapters[$story_id] = array();
+                    }
+                    if (!in_array($chapter_id, $this->batch_new_chapters[$story_id])) {
+                            $this->batch_new_chapters[$story_id][] = $chapter_id;
+                    }
+                } else {
+                    $story_chapters[] = $chapter_id;
+                    update_post_meta($story_id, 'fictioneer_story_chapters', $story_chapters);
+                }
+                
+                // Update crawler progress tracking
+                $chapters_crawled = (int) get_post_meta($story_id, 'crawler_chapters_crawled', true);
+                $chapters_crawled++;
+                update_post_meta($story_id, 'crawler_chapters_crawled', $chapters_crawled);
+                update_post_meta($story_id, 'crawler_last_chapter', $chapter_number);
+                
+                // Defer cache clearing and hooks in batch mode
+                if (!$this->batch_in_progress) {
+                    clean_post_cache($story_id);
+                    $story_post = get_post($story_id);
+                    do_action('save_post_fcn_story', $story_id, $story_post, true);
+                    do_action('fictioneer_cache_purge_post', $story_id);
+                } else {
+                    $this->batch_cache_clear['stories'][] = $story_id;
+                }
+                
+                $this->log_activity('Chapter added to story list', array(
+                    'chapter_id' => $chapter_id,
+                    'story_id' => $story_id,
+                    'total_chapters' => count($story_chapters),
+                    'chapters_crawled' => $chapters_crawled,
+                ));
+            }
+        } else {
+             // Function handled it, but let's make sure we update our crawler stats
             $chapters_crawled = (int) get_post_meta($story_id, 'crawler_chapters_crawled', true);
             $chapters_crawled++;
             update_post_meta($story_id, 'crawler_chapters_crawled', $chapters_crawled);
             update_post_meta($story_id, 'crawler_last_chapter', $chapter_number);
-            
-            // Defer cache clearing and hooks in batch mode
-            if (!$this->batch_in_progress) {
-                clean_post_cache($story_id);
-                $story_post = get_post($story_id);
-                do_action('save_post_fcn_story', $story_id, $story_post, true);
-                do_action('fictioneer_cache_purge_post', $story_id);
-            } else {
-                $this->batch_cache_clear['stories'][] = $story_id;
-            }
-            
-            $this->log_activity('Chapter added to story list', array(
-                'chapter_id' => $chapter_id,
-                'story_id' => $story_id,
-                'total_chapters' => count($story_chapters),
-                'chapters_crawled' => $chapters_crawled,
-            ));
         }
         
         // Log activity
