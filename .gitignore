@@ -1,0 +1,28 @@
+# Configuration files
+config.json
+sdfsdfsfs/crawler/config.json
+
+# API Keys and Secrets
+get_key.php
+*.key
+*.pem
+
+# Python Virtual Environments
+venv/
+env/
+.env
+
+# Python Bytecode
+__pycache__/
+*.pyc
+
+# Local deployment scripts
+deploy_ftp.py
+
+# Logs
+logs/
+*.log
+
+# Temp files
+temp/
+    
