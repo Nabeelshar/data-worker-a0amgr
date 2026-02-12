@@ -59,10 +59,12 @@ class Translator:
         # Convert simple list for prompt
         existing_terms_str = ", ".join([item['original'] for item in existing_glossary])
         
-        prompt = f"""Analyze the provided fiction text. Identify key proper names (characters, locations, unique terms). 
-Output specific translation pairs, one per line, in this exact format:
+        prompt = f"""Analyze the provided fiction text. Identify ONLY the Main Character and Key Supporting Characters (Recurring Names). 
+Do NOT include minor characters, one-off names, locations, or common nouns.
+Output translation pairs, one per line, in this exact format:
 Original Term: English Translation
 
+Strictly limit to at most 5 new important terms.
 Do not output JSON. Do not output markdown code blocks. Just the list.
 Ignore these existing terms: {existing_terms_str}
 
@@ -131,6 +133,12 @@ Text:
                                 filtered_new.append(term)
                         
                         self.logger(f"  Glossary updated: +{len(filtered_new)} terms")
+                        
+                        # Auto-Prune if too large (Safety mechanism against token explosion)
+                        if len(existing_glossary) > 60:
+                             self.logger("  Glossary too large (>60). Pruning minor terms...")
+                             return self.prune_glossary(existing_glossary)
+
                         return existing_glossary
                     else:
                         raise Exception(f"Invalid response: {result}")
@@ -154,6 +162,66 @@ Text:
                 time.sleep(2)
         
         return existing_glossary
+
+    def prune_glossary(self, glossary):
+        """Compress glossary using LLM to keep only most important terms"""
+        if not glossary:
+            return []
+            
+        glossary_text = "\n".join([f"{item['original']}: {item['translation']}" for item in glossary])
+        
+        prompt = f"""Review this glossary list. Keep ONLY the top 40 most important terms (Main Characters, Major Locations, Key Cultivation Terms).
+Remove minor characters, one-off names, and less relevant terms.
+Output the filtered list in the same format:
+Original: Translation
+
+List:
+{glossary_text}"""
+
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/your-repo-link", 
+            "X-Title": "NovelCrawler" 
+        }
+        
+        data = {
+            "model": self.openrouter_model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+        
+        try:
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                data=json.dumps(data),
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content'].strip()
+                    
+                    new_glossary = []
+                    lines = content.split('\n')
+                    for line in lines:
+                        if ':' in line:
+                            parts = line.split(':', 1)
+                            new_glossary.append({
+                                'original': parts[0].strip(),
+                                'translation': parts[1].strip(),
+                                'type': 'term'
+                            })
+                    
+                    self.logger(f"  Glossary Pruned: {len(glossary)} -> {len(new_glossary)} terms")
+                    return new_glossary
+        except Exception as e:
+            self.logger(f"Glossary pruning failed: {e}")
+            
+        return glossary  # Return original if fail
 
     def translate(self, text, source_lang='zh-CN', target_lang='en', glossary=None, system_prompt=None):
         """Translate text using configured service"""
